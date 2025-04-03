@@ -12,7 +12,7 @@ from pathlib import Path
 
 from .base import BaseLLM
 from ..plugins import PLUGINS, get_tools_result_async, function_call_list, update_tools_config
-from ..utils.scripts import safe_get, async_generator_to_sync, parse_function_xml, parse_continuous_json
+from ..utils.scripts import safe_get, async_generator_to_sync, parse_function_xml, parse_continuous_json, convert_functions_to_xml
 from ..core.request import prepare_request_payload
 from ..core.response import fetch_response_stream
 
@@ -148,7 +148,7 @@ class chatgpt(BaseLLM):
                     })
                 self.conversation[convo_id].append({"role": role, "tool_call_id": function_call_id, "content": message})
             else:
-                self.conversation[convo_id].append({"role": "assistant", "content": "I will use tool: " + function_arguments + ". I will get the tool call result in the next user response."})
+                self.conversation[convo_id].append({"role": "assistant", "content": convert_functions_to_xml(function_arguments)})
                 self.conversation[convo_id].append({"role": "user", "content": message})
 
         else:
@@ -418,6 +418,7 @@ class chatgpt(BaseLLM):
         # 处理函数调用
         if need_function_call:
             if self.print_log:
+                print("function_parameter", function_parameter)
                 print("function_full_response", function_full_response)
 
             function_response = ""

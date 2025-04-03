@@ -460,6 +460,7 @@ class XmlMatcher(Generic[R]):
 def parse_function_xml(xml_content: str) -> List[Dict[str, Any]]:
     """
     解析XML格式的函数调用信息，转换为字典数组格式
+    只解析倒数两层XML标签，忽略更高层级的XML标签
 
     参数:
         xml_content: 包含一个或多个函数调用的XML字符串
@@ -469,6 +470,7 @@ def parse_function_xml(xml_content: str) -> List[Dict[str, Any]]:
     """
     result_functions = []
 
+    # 第一步：识别XML中的顶层标签（可能是函数调用）
     position = 0
     while position < len(xml_content):
         # 寻找下一个开始标签
@@ -482,22 +484,23 @@ def parse_function_xml(xml_content: str) -> List[Dict[str, Any]]:
             position = tag_start + 1
             continue
 
+        # 找到标签的结束位置
         tag_end = xml_content.find(">", tag_start)
         if tag_end == -1:
             break  # 标签未正确关闭
 
-        # 提取标签名（函数名）
+        # 提取标签名
         tag_content = xml_content[tag_start+1:tag_end].strip()
         # 处理可能有属性的情况
-        function_name = tag_content.split()[0] if " " in tag_content else tag_content
+        tag_name = tag_content.split()[0] if " " in tag_content else tag_content
 
-        if not function_name:
+        if not tag_name:
             position = tag_end + 1
             continue  # 空标签名，跳过
 
-        # 查找整个函数调用的起止范围
-        full_start_tag = f"<{function_name}"
-        full_end_tag = f"</{function_name}>"
+        # 查找整个标签的起止范围
+        full_start_tag = f"<{tag_name}"
+        full_end_tag = f"</{tag_name}>"
 
         # 从当前位置找到开始标签
         start_pos = xml_content.find(full_start_tag, position)
@@ -512,78 +515,67 @@ def parse_function_xml(xml_content: str) -> List[Dict[str, Any]]:
             position = tag_end + 1
             continue
 
-        # 计算整个函数标签内容，包括开始和结束标签
-        end_pos_complete = end_pos + len(full_end_tag)
-        full_tag_content = xml_content[start_pos:end_pos_complete]
+        # 标签的内容（不包括开始和结束标签）
+        tag_inner_content = xml_content[tag_end+1:end_pos]
 
-        # 使用XmlMatcher提取该函数标签内的内容
-        content_matcher = XmlMatcher[XmlMatcherResult](function_name)
-        match_results = content_matcher.final(full_tag_content)
+        # 如果是普通辅助标签（如tool_call），则在其内部寻找函数调用
+        if tag_name in ["tool_call", "function_call", "tool", "function"]:
+            # 递归处理内部内容
+            nested_functions = parse_function_xml(tag_inner_content)
+            result_functions.extend(nested_functions)
+        else:
+            # 将当前标签作为函数名，解析其内部标签作为参数
+            parameters = {}
 
-        function_content = ""
-        for result in match_results:
-            if result.matched:
-                function_content = result.data
-                break
+            # 解析内部标签作为参数
+            param_position = 0
+            while param_position < len(tag_inner_content):
+                param_tag_start = tag_inner_content.find("<", param_position)
+                if param_tag_start == -1:
+                    break
 
-        # 解析参数
-        parameters = {}
-        if function_content:
-            lines = function_content.strip().split('\n')
-            current_param = None
-            current_value = []
+                # 跳过闭合标签
+                if param_tag_start + 1 < len(tag_inner_content) and tag_inner_content[param_tag_start + 1] == '/':
+                    param_position = param_tag_start + 1
+                    continue
 
-            for line in lines:
-                line = line.strip()
-                if line.startswith('<') and '>' in line and not line.startswith('</'):
-                    # 新参数开始
-                    if current_param and current_value:
-                        # 保存之前的参数
-                        parameters[current_param] = '\n'.join(current_value).strip()
-                        current_value = []
+                param_tag_end = tag_inner_content.find(">", param_tag_start)
+                if param_tag_end == -1:
+                    break
 
-                    # 提取参数名
-                    param_start = line.find('<') + 1
-                    param_end = line.find('>', param_start)
-                    if param_end != -1:
-                        param = line[param_start:param_end]
-                        # 检查是否是闭合标签
-                        if not param.startswith('/'):
-                            current_param = param
-                            # 检查是否在同一行有值
-                            rest = line[param_end+1:]
-                            if rest and not rest.startswith('</'):
-                                current_value.append(rest)
-                elif line.startswith('</') and '>' in line:
-                    # 参数结束
-                    if current_param and current_value:
-                        param_end_tag = f"</{current_param}>"
-                        if line.strip() == param_end_tag:
-                            parameters[current_param] = '\n'.join(current_value).strip()
-                            current_param = None
-                            current_value = []
-                elif current_param:
-                    # 继续收集当前参数的值
-                    current_value.append(line)
+                # 提取参数名
+                param_name = tag_inner_content[param_tag_start+1:param_tag_end].strip()
+                if " " in param_name:  # 处理有属性的情况
+                    param_name = param_name.split()[0]
 
-            # 处理最后一个参数
-            if current_param and current_value:
-                parameters[current_param] = '\n'.join(current_value).strip()
+                if not param_name:
+                    param_position = param_tag_end + 1
+                    continue
 
-            # 清理参数值中可能的结束标签
-            for param, value in parameters.items():
-                end_tag = f'</{param}>'
-                if value.endswith(end_tag):
-                    parameters[param] = value[:-len(end_tag)].strip()
+                # 查找参数标签的结束位置
+                param_end_tag = f"</{param_name}>"
+                param_end_pos = tag_inner_content.find(param_end_tag, param_tag_end)
 
-        # 将解析的函数添加到结果数组
-        result_functions.append({
-            'function_name': function_name,
-            'parameter': parameters
-        })
+                if param_end_pos == -1:
+                    # 参数标签未闭合
+                    param_position = param_tag_end + 1
+                    continue
 
-        # 更新位置到当前标签之后，继续查找下一个函数
-        position = end_pos_complete
+                # 提取参数值
+                param_value = tag_inner_content[param_tag_end+1:param_end_pos].strip()
+                parameters[param_name] = param_value
+
+                # 更新位置到当前参数标签之后
+                param_position = param_end_pos + len(param_end_tag)
+
+            # 添加解析结果
+            result_functions.append({
+                'function_name': tag_name,
+                'parameter': parameters
+            })
+
+        # 更新位置到当前标签之后
+        position = end_pos + len(full_end_tag)
 
     return result_functions
 
@@ -657,5 +649,71 @@ def parse_continuous_json(json_str: str, function_name: str = "") -> List[Dict[s
 
     return result
 
+def convert_functions_to_xml(functions_list):
+    """
+    将函数调用列表转换为XML格式的字符串
+
+    参数:
+        functions_list: 函数调用列表，每个元素是包含function_name和parameter的字典
+
+    返回:
+        XML格式的字符串
+    """
+    xml_result = ""
+
+    if isinstance(functions_list, str):
+        try:
+            # 提取并解析JSON字符串
+            functions_list = json.loads(functions_list)
+            # 确保解析结果是列表
+            if not isinstance(functions_list, list):
+                print(f"提取的工具调用不是列表格式: {functions_list}")
+        except json.JSONDecodeError as e:
+            print(f"从文本中提取的工具调用JSON解析失败: {e}")
+
+    for func in functions_list:
+        # 获取函数名和参数
+        function_name = func.get('function_name', '')
+        parameters = func.get('parameter', {})
+
+        # 开始函数标签
+        xml_result += f"<{function_name}>\n"
+
+        # 添加所有参数
+        for param_name, param_value in parameters.items():
+            xml_result += f"<{param_name}>{param_value}</{param_name}>\n"
+
+        # 结束函数标签
+        xml_result += f"</{function_name}>\n"
+
+    return xml_result
+
 if __name__ == "__main__":
+
+    # 运行本文件：python -m aient.utils.scripts
     os.system("clear")
+    test_xml = """
+✅ 好的，我现在读取 `README.md` 文件。
+<tool_call>
+<read_file>
+<file_path>/Users/yanyuming/Downloads/GitHub/llama3_interpretability_sae/README.md</file_path>
+</read_file>
+</tool_call>好的，我现在读取 `README.md` 文件。
+"""
+    test_xml = """
+✅ 好的，我现在读取 `README.md` 文件。
+<read_file>
+<file_path>README.md</file_path>
+</read_file>
+<read_file>
+<file_path>README.md</file_path>
+</read_file>
+
+<tool_call>
+<read_file>
+<file_path>README.md</file_path>
+</read_file>
+</tool_call>
+好的，我现在读取 `README.md` 文件。
+"""
+    print(parse_function_xml(test_xml))
