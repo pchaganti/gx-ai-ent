@@ -159,7 +159,9 @@ class chatgpt(BaseLLM):
 
         conversation_len = len(self.conversation[convo_id]) - 1
         message_index = 0
-        # print(json.dumps(self.conversation[convo_id], indent=4, ensure_ascii=False))
+        # if self.print_log:
+        #     replaced_text = json.loads(re.sub(r';base64,([A-Za-z0-9+/=]+)', ';base64,***', json.dumps(self.conversation[convo_id])))
+        #     print(json.dumps(replaced_text, indent=4, ensure_ascii=False))
         while message_index < conversation_len:
             if self.conversation[convo_id][message_index]["role"] == self.conversation[convo_id][message_index + 1]["role"]:
                 if self.conversation[convo_id][message_index].get("content") and self.conversation[convo_id][message_index + 1].get("content"):
@@ -179,6 +181,9 @@ class chatgpt(BaseLLM):
                     if type(self.conversation[convo_id][message_index]["content"]) == dict \
                     and type(self.conversation[convo_id][message_index + 1]["content"]) == dict:
                         self.conversation[convo_id][message_index]["content"] = [self.conversation[convo_id][message_index]["content"]]
+                        self.conversation[convo_id][message_index + 1]["content"] = [self.conversation[convo_id][message_index + 1]["content"]]
+                    if type(self.conversation[convo_id][message_index]["content"]) == list \
+                    and type(self.conversation[convo_id][message_index + 1]["content"]) == dict:
                         self.conversation[convo_id][message_index + 1]["content"] = [self.conversation[convo_id][message_index + 1]["content"]]
                     self.conversation[convo_id][message_index]["content"] += self.conversation[convo_id][message_index + 1]["content"]
                 self.conversation[convo_id].pop(message_index + 1)
