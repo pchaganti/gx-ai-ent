@@ -60,7 +60,7 @@ function_call_list = \
         }
     },
     "DATE": {
-        "name": "get_date_time_weekday",
+        "name": "get_time",
         "description": "Get the current time, date, and day of the week",
     },
     "VERSION": {

@@ -39,29 +39,15 @@ class BaseLLM:
         self.reply_count: int = reply_count
         self.max_tokens: int = max_tokens or (
             4096
-            if "gpt-4-1106-preview" in engine or "gpt-4-0125-preview" in engine or "gpt-4-turbo" in engine or "gpt-3.5-turbo-1106" in engine or "claude" in engine or "gpt-4o" in engine
-            else 31000
-            if "gpt-4-32k" in engine
-            else 7000
-            if "gpt-4" in engine
-            else 16385
-            if "gpt-3.5-turbo-16k" in engine
-            # else 99000
-            # if "claude-2.1" in engine
+            if "gpt-4" or "claude" in engine
             else 4000
         )
         self.truncate_limit: int = truncate_limit or (
-            127500
-            if "gpt-4-1106-preview" in engine or "gpt-4-0125-preview" in engine or "gpt-4-turbo" in engine or "gpt-4o" in engine
-            else 30500
-            if "gpt-4-32k" in engine
-            else 6500
-            if "gpt-4" in engine
-            else 14500
-            if "gpt-3.5-turbo-16k" in engine or "gpt-3.5-turbo-1106" in engine
-            else 98500
-            if "claude-2.1" in engine
-            else 3500
+            198000
+            if "claude" in engine
+            else 1000000
+            if "gemini" in engine or "quasar-alpha" in engine
+            else 127500
         )
         self.timeout: float = timeout
         self.proxy = proxy

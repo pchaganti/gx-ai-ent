@@ -55,7 +55,7 @@ The following is a list of environment variables related to plugin settings:
 | download_read_arxiv_pdf | Whether to enable the arXiv paper abstract plugin. The default value is `False`. | No |
 | run_python_script | Whether to enable the code interpreter plugin. The default value is `False`. | No |
 | generate_image | Whether to enable the image generation plugin. The default value is `False`. | No |
-| get_date_time_weekday | Whether to enable the date plugin. The default value is `False`. | No |
+| get_time | Whether to enable the date plugin. The default value is `False`. | No |
 
 ## Supported models
 

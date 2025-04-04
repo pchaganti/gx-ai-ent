@@ -55,7 +55,7 @@ bot = chatgpt(api_key="{YOUR_API_KEY}", engine="gpt-4o", use_plugins=False)
 | download_read_arxiv_pdf | 是否启用arXiv论文摘要插件。默认值为 `False`。 | 否 |
 | run_python_script | 是否启用代码解释器插件。默认值为 `False`。 | 否 |
 | generate_image | 是否启用图像生成插件。默认值为 `False`。 | 否 |
-| get_date_time_weekday | 是否启用日期插件。默认值为 `False`。 | 否 |
+| get_time | 是否启用日期插件。默认值为 `False`。 | 否 |
 
 ## 支持的模型
 

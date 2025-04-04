@@ -416,7 +416,7 @@ class chatgpt(BaseLLM):
             need_function_call = True
 
         # 处理函数调用
-        if need_function_call:
+        if need_function_call and self.use_plugins != False:
             if self.print_log:
                 print("function_parameter", function_parameter)
                 print("function_full_response", function_full_response)
