@@ -9,6 +9,9 @@ def read_file(file_path):
     """
 Description: Request to read the contents of a file at the specified path. Use this when you need to examine the contents of an existing file you do not know the contents of, for example to analyze code, review text files, or extract information from configuration files. Automatically extracts raw text from PDF and DOCX files. May not be suitable for other types of binary files, as it returns the raw content as a string.
 
+注意：
+1. pdf 文件 必须使用 read_file 读取
+
 参数:
     file_path: 要读取的文件路径，(required) The path of the file to read (relative to the current working directory)
 
@@ -24,7 +27,7 @@ Examples:
 
 1. Reading an entire file:
 <read_file>
-<file_path>frontend-config.json</file_path>
+<file_path>frontend.pdf</file_path>
 </read_file>
 
 2. Reading multiple files:
@@ -34,7 +37,7 @@ Examples:
 </read_file>
 
 <read_file>
-<file_path>backend-config.json</file_path>
+<file_path>backend-config.txt</file_path>
 </read_file>
 
 ...

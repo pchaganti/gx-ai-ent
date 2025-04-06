@@ -716,4 +716,6 @@ if __name__ == "__main__":
 </tool_call>
 好的，我现在读取 `README.md` 文件。
 """
+
+    test_xml = """首先使用read_file工具读取论文内容，然后使用excute_command工具克隆代码仓库到本地。\n```xml\n<read_file>\n<file_path>/Users/yanyuming/Downloads/GitHub/OceanSynthesis/papers/2412.06410v1.pdf</file_path>\n</read_file>\n\n<excute_command>\n<command>git clone https://github.com/bartbussmann/BatchTopK.git</command>\n</excute_command>\n```"""
     print(parse_function_xml(test_xml))

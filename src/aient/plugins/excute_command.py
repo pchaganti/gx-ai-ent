@@ -6,7 +6,7 @@ from .registry import register_tool
 def excute_command(command):
     """
     执行命令并返回输出结果
-    禁止用于查看pdf
+    禁止用于查看pdf，禁止使用 pdftotext 命令
 
     参数:
         command: 要执行的命令，可以克隆仓库，安装依赖，运行代码等
