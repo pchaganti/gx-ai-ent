@@ -81,7 +81,6 @@ class BaseLLM:
                 },
             ],
         }
-        self.truncate_limit: int = 100000
         self.tokens_usage = defaultdict(int)
         self.function_calls_counter = {}
         self.function_call_max_loop = 10
