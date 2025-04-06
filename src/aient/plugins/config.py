@@ -13,7 +13,7 @@ async def get_tools_result_async(function_call_name, function_full_response, fun
     if function_call_name == "get_search_results":
         prompt = json.loads(function_full_response)["query"]
         yield "message_search_stage_1"
-        llm = robot(api_key=api_key, api_url=api_url.source_api_url, engine=engine, use_plugins=use_plugins)
+        llm = robot(api_key=api_key, api_url=api_url, engine=engine, use_plugins=use_plugins)
         keywords = (await llm.ask_async(search_key_word_prompt.format(source=prompt), model=model)).split("\n")
         print("keywords", keywords)
         keywords = [item.replace("三行关键词是：", "") for item in keywords if "\\x" not in item if item != ""]

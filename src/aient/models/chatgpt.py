@@ -445,7 +445,7 @@ class chatgpt(BaseLLM):
                         async for chunk in get_tools_result_async(
                             tool_name, tool_args, function_call_max_tokens,
                             model or self.engine, chatgpt, kwargs.get('api_key', self.api_key),
-                            self.api_url, use_plugins=False, model=model or self.engine,
+                            kwargs.get('api_url', self.api_url.chat_url), use_plugins=False, model=model or self.engine,
                             add_message=self.add_to_conversation, convo_id=convo_id, language=language
                         ):
                             yield chunk
@@ -454,7 +454,7 @@ class chatgpt(BaseLLM):
                             async for chunk in get_tools_result_async(
                                 tool_name, tool_args, function_call_max_tokens,
                                 model or self.engine, chatgpt, kwargs.get('api_key', self.api_key),
-                                self.api_url, use_plugins=False, model=model or self.engine,
+                                kwargs.get('api_url', self.api_url.chat_url), use_plugins=False, model=model or self.engine,
                                 add_message=self.add_to_conversation, convo_id=convo_id, language=language
                             ):
                                 yield chunk
