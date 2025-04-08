@@ -8,6 +8,7 @@ from ..utils.prompt import search_key_word_prompt, arxiv_doc_user_prompt
 
 async def get_tools_result_async(function_call_name, function_full_response, function_call_max_tokens, engine, robot, api_key, api_url, use_plugins, model, add_message, convo_id, language):
     function_response = ""
+    function_to_call = None
     if function_call_name in registry.tools:
         function_to_call = registry.tools[function_call_name]
     if function_call_name == "get_search_results":
@@ -41,7 +42,7 @@ async def get_tools_result_async(function_call_name, function_full_response, fun
             function_response = "无法找到相关信息，停止使用 tools"
         # user_prompt = f"You need to response the following question: {prompt}. Search results is provided inside <Search_results></Search_results> XML tags. Your task is to think about the question step by step and then answer the above question in {config.language} based on the Search results provided. Please response in {config.language} and adopt a style that is logical, in-depth, and detailed. Note: In order to make the answer appear highly professional, you should be an expert in textual analysis, aiming to make the answer precise and comprehensive. Directly response markdown format, without using markdown code blocks"
         # self.add_to_conversation(user_prompt, "user", convo_id=convo_id)
-    else:
+    elif function_to_call:
         prompt = json.loads(function_full_response)
         if inspect.iscoroutinefunction(function_to_call):
             function_response = await function_to_call(**prompt)
