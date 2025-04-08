@@ -207,6 +207,7 @@ class chatgpt(BaseLLM):
                     history_len = history_len - 1
 
         if total_tokens:
+            self.current_tokens[convo_id] = total_tokens
             self.tokens_usage[convo_id] += total_tokens
 
     def truncate_conversation(self, convo_id: str = "default") -> None:
@@ -215,24 +216,16 @@ class chatgpt(BaseLLM):
         """
         while True:
             if (
-                self.tokens_usage[convo_id] > self.truncate_limit
+                self.current_tokens[convo_id] > self.truncate_limit
                 and len(self.conversation[convo_id]) > 1
             ):
                 # Don't remove the first message
                 mess = self.conversation[convo_id].pop(1)
+                string_mess = json.dumps(mess, ensure_ascii=False)
+                self.current_tokens[convo_id] -= len(string_mess) / 4
                 print("Truncate message:", mess)
             else:
                 break
-
-    def extract_values(self, obj):
-        if isinstance(obj, dict):
-            for value in obj.values():
-                yield from self.extract_values(value)
-        elif isinstance(obj, list):
-            for item in obj:
-                yield from self.extract_values(item)
-        else:
-            yield obj
 
     async def get_post_body(
         self,
@@ -789,6 +782,7 @@ class chatgpt(BaseLLM):
             {"role": "system", "content": self.system_prompt},
         ]
         self.tokens_usage[convo_id] = 0
+        self.current_tokens[convo_id] = 0
 
     def save(self, file: str, *keys: str) -> None:
         """

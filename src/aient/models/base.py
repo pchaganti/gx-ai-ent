@@ -82,6 +82,7 @@ class BaseLLM:
             ],
         }
         self.tokens_usage = defaultdict(int)
+        self.current_tokens = defaultdict(int)
         self.function_calls_counter = {}
         self.function_call_max_loop = 10
         self.use_plugins = use_plugins
