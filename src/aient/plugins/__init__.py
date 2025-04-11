@@ -29,4 +29,5 @@ __all__ = [
     'register_tool',
     'register_agent',
     'update_tools_config',
+    'get_function_call_list',
 ] + list(registry.tools.keys())

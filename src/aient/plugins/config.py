@@ -143,10 +143,15 @@ def get_plugins():
     }
 
 # 修改function_call_list定义，使用registry中的工具
-def get_function_call_list():
+def get_function_call_list(tools_list=None):
     function_list = {}
+    if tools_list is None:
+        filtered_tools = registry.tools.keys()
+    else:
+        filtered_tools = [tool.__name__ if callable(tool) else str(tool) for tool in tools_list]
     for tool_name, tool_func in registry.tools.items():
-        function_list[tool_name] = function_to_json(tool_func)
+        if tool_name in filtered_tools:
+            function_list[tool_name] = function_to_json(tool_func)
     return function_list
 
 def get_claude_tools_list():
