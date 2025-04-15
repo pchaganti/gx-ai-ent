@@ -83,8 +83,6 @@ class chatgpt(BaseLLM):
         # 注册和处理传入的工具
         self._register_tools(tools)
 
-        if self.tokens_usage["default"] > self.max_tokens:
-            raise Exception("System prompt is too long")
 
     def _register_tools(self, tools):
         """动态注册工具函数并更新配置"""
@@ -255,13 +253,15 @@ class chatgpt(BaseLLM):
                 {"role": "system","content": self.system_prompt},
                 {"role": role, "content": prompt}
             ],
-            "max_tokens": kwargs.get("max_tokens", self.max_tokens),
             "stream": True,
             "stream_options": {
                 "include_usage": True
             },
             "temperature": kwargs.get("temperature", self.temperature)
         }
+
+        if kwargs.get("max_tokens", self.max_tokens):
+            request_data["max_tokens"] = kwargs.get("max_tokens", self.max_tokens)
 
         # 添加工具相关信息
         if kwargs.get("plugins", None):

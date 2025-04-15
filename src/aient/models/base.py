@@ -37,11 +37,6 @@ class BaseLLM:
         self.presence_penalty: float = presence_penalty
         self.frequency_penalty: float = frequency_penalty
         self.reply_count: int = reply_count
-        self.max_tokens: int = max_tokens or (
-            4096
-            if "gpt-4" or "claude" in engine
-            else 4000
-        )
         self.truncate_limit: int = truncate_limit or (
             198000
             if "claude" in engine
