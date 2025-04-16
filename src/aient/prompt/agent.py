@@ -62,7 +62,7 @@ When making code changes, NEVER output code to the USER, unless requested. Inste
 </calling_external_apis>
 
 <user_info>
-The user's OS version is {os_name} {os_version}. The absolute path of the user's workspace is {workspace_path} which is also the project root directory. 请在指令中使用绝对路径。所有操作必须基于工作目录。禁止在工作目录之外进行任何操作。 The user's shell is {shell}.
+The user's OS version is {os_name} {os_version}. The absolute path of the user's workspace is {workspace_path} which is also the project root directory. 请在指令中使用绝对路径。所有操作必须基于工作目录。禁止在工作目录之外进行任何操作。禁止默认你当前就在工作目录。The user's shell is {shell}.
 </user_info>
 
 <instructions for tool use>
@@ -127,7 +127,7 @@ instruction_system_prompt = """
 
 你需要称呼工作智能体为“你”，指令禁止使用疑问句，必须使用祈使句。
 所有回复必须使用中文。
-你的工作目录为：{workspace_path}，请在指令中使用绝对路径。所有操作必须基于工作目录。禁止在工作目录之外进行任何操作。
+你的工作目录为：{workspace_path}，请在指令中使用绝对路径。所有操作必须基于工作目录。禁止在工作目录之外进行任何操作。禁止默认你当前就在工作目录。
 
 
 你的输出必须符合以下步骤：

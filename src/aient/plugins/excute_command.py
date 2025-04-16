@@ -5,14 +5,15 @@ from .registry import register_tool
 @register_tool()
 def excute_command(command):
     """
-    执行命令并返回输出结果
-    禁止用于查看pdf，禁止使用 pdftotext 命令
+执行命令并返回输出结果
+禁止用于查看pdf，禁止使用 pdftotext 命令
+请确保生成的命令字符串可以直接在终端执行，特殊字符（例如 &&）必须保持原样，不要进行 HTML 编码或任何形式的转义。
 
-    参数:
-        command: 要执行的命令，可以克隆仓库，安装依赖，运行代码等
+参数:
+    command: 要执行的命令，可以克隆仓库，安装依赖，运行代码等
 
-    返回:
-        命令执行的输出结果或错误信息
+返回:
+    命令执行的输出结果或错误信息
     """
     try:
         # 使用subprocess.run捕获命令输出
