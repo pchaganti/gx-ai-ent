@@ -7,7 +7,15 @@ def excute_command(command):
     """
 执行命令并返回输出结果
 禁止用于查看pdf，禁止使用 pdftotext 命令
-请确保生成的命令字符串可以直接在终端执行，特殊字符（例如 &&）必须保持原样，不要进行 HTML 编码或任何形式的转义，比如禁止使用 &amp;&amp; 代替 &&。
+请确保生成的命令字符串可以直接在终端执行，特殊字符（例如 &&）必须保持原样，不要进行 HTML 编码或任何形式的转义，禁止使用 &amp;&amp;
+
+for example:
+
+correct:
+ls -l && echo 'Hello, World!'
+
+incorrect:
+ls -l &amp;&amp; echo 'Hello, World!'
 
 参数:
     command: 要执行的命令，可以克隆仓库，安装依赖，运行代码等
