@@ -50,8 +50,8 @@ async def get_tools_result_async(function_call_name, function_full_response, fun
             function_response = function_to_call(**prompt)
         function_response, text_len = cut_message(function_response, function_call_max_tokens, engine)
 
-    if function_call_name == "download_read_arxiv_pdf":
-        add_message(arxiv_doc_user_prompt, "user", convo_id=convo_id)
+    # if function_call_name == "download_read_arxiv_pdf":
+    #     add_message(arxiv_doc_user_prompt, "user", convo_id=convo_id)
 
     function_response = (
         f"function_response:{function_response}"
