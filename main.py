@@ -1,8 +1,8 @@
 import os
 from datetime import datetime
 
-from aient.utils import prompt
-from aient.models import chatgpt, claude3, gemini, groq
+from src.aient.utils import prompt
+from src.aient.models import chatgpt, claude3, gemini, groq
 LANGUAGE = os.environ.get('LANGUAGE', 'Simplified Chinese')
 GPT_ENGINE = os.environ.get('GPT_ENGINE', 'gpt-4-turbo-2024-04-09')
 
