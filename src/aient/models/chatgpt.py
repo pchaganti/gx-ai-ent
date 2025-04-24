@@ -62,6 +62,7 @@ class chatgpt(BaseLLM):
         tools: Optional[Union[list, str, Callable]] = [],
         function_call_max_loop: int = 3,
         cut_history_by_function_name: str = "",
+        cache_messages: list = None,
     ) -> None:
         """
         Initialize Chatbot with API key (from https://platform.openai.com/account/api-keys)
@@ -75,6 +76,8 @@ class chatgpt(BaseLLM):
                 },
             ],
         }
+        if cache_messages:
+            self.conversation["default"] = cache_messages
         self.function_calls_counter = {}
         self.function_call_max_loop = function_call_max_loop
         self.cut_history_by_function_name = cut_history_by_function_name
