@@ -1,4 +1,5 @@
 import os
+import json
 from pdfminer.high_level import extract_text
 
 from .registry import register_tool
@@ -63,6 +64,40 @@ Examples:
             # 如果提取结果为空
             if not text_content:
                 return f"错误: 无法从 '{file_path}' 提取文本内容"
+        elif file_path.lower().endswith('.ipynb'):
+            try:
+                with open(file_path, 'r', encoding='utf-8') as file:
+                    notebook_content = json.load(file)
+
+                for cell in notebook_content.get('cells', []):
+                    if cell.get('cell_type') == 'code' and 'outputs' in cell:
+                        filtered_outputs = []
+                        for output in cell.get('outputs', []):
+                            new_output = output.copy()
+                            if 'data' in new_output:
+                                original_data = new_output['data']
+                                filtered_data = {}
+                                for key, value in original_data.items():
+                                    if key.startswith('image/'):
+                                        continue
+                                    if key == 'text/html':
+                                        html_content = "".join(value) if isinstance(value, list) else value
+                                        if isinstance(html_content, str) and '<table class="show_videos"' in html_content:
+                                            continue
+                                    filtered_data[key] = value
+                                if filtered_data:
+                                    new_output['data'] = filtered_data
+                                    filtered_outputs.append(new_output)
+                            elif 'output_type' in new_output and new_output['output_type'] in ['stream', 'error']:
+                                filtered_outputs.append(new_output)
+
+                        cell['outputs'] = filtered_outputs
+
+                text_content = json.dumps(notebook_content, indent=2, ensure_ascii=False)
+            except json.JSONDecodeError:
+                return f"错误: 文件 '{file_path}' 不是有效的JSON格式 (IPython Notebook)。"
+            except Exception as e:
+                return f"处理IPython Notebook文件 '{file_path}' 时发生错误: {e}"
         else:
             # 读取文件内容
             with open(file_path, 'r', encoding='utf-8') as file:
@@ -77,3 +112,9 @@ Examples:
         return f"错误: 文件 '{file_path}' 不是文本文件或编码不是UTF-8"
     except Exception as e:
         return f"读取文件时发生错误: {e}"
+
+if __name__ == "__main__":
+    # python -m beswarm.aient.src.aient.plugins.read_file
+    result = read_file("./work/cax/Lenia Notebook.ipynb")
+    print(result)
+    print(len(result))
