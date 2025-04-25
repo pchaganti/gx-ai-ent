@@ -409,7 +409,19 @@ class chatgpt(BaseLLM):
 
         function_parameter = parse_function_xml(full_response)
         if function_parameter:
-            need_function_call = True
+            for tool_dict in function_parameter:
+                if tool_dict.get("function_name", "") not in self.plugins.keys():
+                    function_parameter.remove(tool_dict)
+            if function_parameter:
+                need_function_call = True
+            else:
+                if self.print_log:
+                    print("Failed to parse function_parameter", function_parameter)
+                    print("full_response", full_response)
+                full_response = (
+                    f"{full_response}"
+                    "\n\nFailed to parse function parameter, I need to try again."
+                )
 
         # 处理函数调用
         if need_function_call and self.use_plugins != False:
