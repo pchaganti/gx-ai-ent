@@ -412,9 +412,11 @@ class chatgpt(BaseLLM):
             for tool_dict in function_parameter:
                 if tool_dict.get("function_name", "") not in self.plugins.keys():
                     function_parameter.remove(tool_dict)
+                    full_response = full_response + f"\n\nFunction: {tool_dict.get('function_name', '')} does not exist! I must use existing functions. I need to try again."
             if function_parameter:
                 need_function_call = True
             else:
+                need_function_call = False
                 if self.print_log:
                     print("Failed to parse function_parameter", function_parameter)
                     print("full_response", full_response)
