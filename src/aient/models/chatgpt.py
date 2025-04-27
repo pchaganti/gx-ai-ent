@@ -81,6 +81,7 @@ class chatgpt(BaseLLM):
         self.function_calls_counter = {}
         self.function_call_max_loop = function_call_max_loop
         self.cut_history_by_function_name = cut_history_by_function_name
+        self.latest_file_content = {}
 
 
         # 注册和处理传入的工具
@@ -228,6 +229,27 @@ class chatgpt(BaseLLM):
             else:
                 break
 
+    def get_latest_file_content(self) -> str:
+        """
+        获取最新文件内容
+        """
+        result = ""
+        if self.latest_file_content:
+            for file_path, content in self.latest_file_content.items():
+                result += (
+                    "<file>"
+                    f"<file_path>{file_path}</file_path>"
+                    f"<file_content>{content}</file_content>"
+                    "</file>\n\n"
+                )
+            if result:
+                result = (
+                    "<latest_file_content>"
+                    f"{result}"
+                    "</latest_file_content>"
+                )
+        return result
+
     async def get_post_body(
         self,
         prompt: str,
@@ -237,7 +259,7 @@ class chatgpt(BaseLLM):
         pass_history: int = 9999,
         **kwargs,
     ):
-        self.conversation[convo_id][0] = {"role": "system","content": self.system_prompt}
+        self.conversation[convo_id][0] = {"role": "system","content": self.system_prompt + "\n\n" + self.get_latest_file_content()}
 
         # 构造 provider 信息
         provider = {
@@ -253,7 +275,7 @@ class chatgpt(BaseLLM):
         request_data = {
             "model": model or self.engine,
             "messages": copy.deepcopy(self.conversation[convo_id]) if pass_history else [
-                {"role": "system","content": self.system_prompt},
+                {"role": "system","content": self.system_prompt + "\n\n" + self.get_latest_file_content()},
                 {"role": role, "content": prompt}
             ],
             "stream": True,
@@ -499,7 +521,7 @@ class chatgpt(BaseLLM):
 
             for tool_info in tool_calls:
                 tool_name = tool_info['function_name']
-                tool_args = json.dumps(tool_info['parameter']) if not isinstance(tool_info['parameter'], str) else tool_info['parameter']
+                tool_args = json.dumps(tool_info['parameter'], ensure_ascii=False) if not isinstance(tool_info['parameter'], str) else tool_info['parameter']
                 tool_id = tool_info.get('function_call_id', tool_name + "_tool_call")
 
                 tool_response = ""
@@ -515,7 +537,13 @@ class chatgpt(BaseLLM):
                             tool_response = chunk.replace("function_response:", "")
                         else:
                             yield chunk
-                all_responses.append(f"[{tool_name}({tool_args}) Result]:\n\n{tool_response}")
+                if tool_name == "read_file" and "<read_file error>" not in tool_response:
+                    self.latest_file_content[tool_info['parameter']["file_path"]] = tool_response
+                    all_responses.append(f"[{tool_name}({tool_args}) Result]:\n\nRead file successfully! The file content has been updated in the tag <latest_file_content>.")
+                elif tool_name == "write_to_file":
+                    all_responses.append(f"[{tool_name}(...) Result]:\n\n{tool_response}")
+                else:
+                    all_responses.append(f"[{tool_name}({tool_args}) Result]:\n\n{tool_response}")
 
             # 合并所有工具响应
             function_response = "\n\n".join(all_responses)
@@ -795,6 +823,7 @@ class chatgpt(BaseLLM):
         Reset the conversation
         """
         self.system_prompt = system_prompt or self.system_prompt
+        self.latest_file_content = {}
         self.conversation[convo_id] = [
             {"role": "system", "content": self.system_prompt},
         ]

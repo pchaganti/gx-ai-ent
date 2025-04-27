@@ -28,20 +28,6 @@ def cut_message(message: str, max_tokens: int, model_name: str):
     encode_text = encoding.encode(message, disallowed_special=())
     return message, len(encode_text)
 
-import imghdr
-def encode_image(image_path):
-    with open(image_path, "rb") as image_file:
-        file_content = image_file.read()
-        file_type = imghdr.what(None, file_content)
-        base64_encoded = base64.b64encode(file_content).decode('utf-8')
-
-        if file_type == 'png':
-            return f"data:image/png;base64,{base64_encoded}"
-        elif file_type in ['jpeg', 'jpg']:
-            return f"data:image/jpeg;base64,{base64_encoded}"
-        else:
-            raise ValueError(f"不支持的图片格式: {file_type}")
-
 def get_doc_from_url(url):
     filename = urllib.parse.unquote(url.split("/")[-1])
     response = requests.get(url, stream=True)
@@ -49,13 +35,6 @@ def get_doc_from_url(url):
         for chunk in response.iter_content(chunk_size=1024):
             f.write(chunk)
     return filename
-
-def get_encode_image(image_url):
-    filename = get_doc_from_url(image_url)
-    image_path = os.getcwd() + "/" + filename
-    base64_image = encode_image(image_path)
-    os.remove(image_path)
-    return base64_image
 
 from io import BytesIO
 def get_audio_message(file_bytes):

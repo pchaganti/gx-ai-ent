@@ -50,11 +50,11 @@ Examples:
     try:
         # 检查文件是否存在
         if not os.path.exists(file_path):
-            return f"错误: 文件 '{file_path}' 不存在"
+            return f"<read_file error>文件 '{file_path}' 不存在</read_file error>"
 
         # 检查是否为文件
         if not os.path.isfile(file_path):
-            return f"错误: '{file_path}' 不是一个文件"
+            return f"<read_file error>'{file_path}' 不是一个文件</read_file error>"
 
         # 检查文件扩展名
         if file_path.lower().endswith('.pdf'):
@@ -63,7 +63,7 @@ Examples:
 
             # 如果提取结果为空
             if not text_content:
-                return f"错误: 无法从 '{file_path}' 提取文本内容"
+                return f"<read_file error>无法从 '{file_path}' 提取文本内容</read_file error>"
         elif file_path.lower().endswith('.ipynb'):
             try:
                 with open(file_path, 'r', encoding='utf-8') as file:
@@ -95,9 +95,9 @@ Examples:
 
                 text_content = json.dumps(notebook_content, indent=2, ensure_ascii=False)
             except json.JSONDecodeError:
-                return f"错误: 文件 '{file_path}' 不是有效的JSON格式 (IPython Notebook)。"
+                return f"<read_file error>文件 '{file_path}' 不是有效的JSON格式 (IPython Notebook)。</read_file error>"
             except Exception as e:
-                return f"处理IPython Notebook文件 '{file_path}' 时发生错误: {e}"
+                return f"<read_file error>处理IPython Notebook文件 '{file_path}' 时发生错误: {e}</read_file error>"
         else:
             # 读取文件内容
             with open(file_path, 'r', encoding='utf-8') as file:
@@ -107,11 +107,11 @@ Examples:
         return text_content
 
     except PermissionError:
-        return f"错误: 没有权限访问文件 '{file_path}'"
+        return f"<read_file error>没有权限访问文件 '{file_path}'</read_file error>"
     except UnicodeDecodeError:
-        return f"错误: 文件 '{file_path}' 不是文本文件或编码不是UTF-8"
+        return f"<read_file error>文件 '{file_path}' 不是文本文件或编码不是UTF-8</read_file error>"
     except Exception as e:
-        return f"读取文件时发生错误: {e}"
+        return f"<read_file error>读取文件时发生错误: {e}</read_file error>"
 
 if __name__ == "__main__":
     # python -m beswarm.aient.src.aient.plugins.read_file

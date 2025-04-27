@@ -48,4 +48,4 @@ Example: Requesting to write to frontend-config.json
     with open(path, mode, encoding='utf-8') as file:
         file.write(content)
 
-    return f"文件已成功写入：{path}"
+    return f"已成功写入文件：{path}"
