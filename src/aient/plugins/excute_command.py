@@ -27,7 +27,10 @@ ls -l &amp;&amp; echo 'Hello, World!'
         # 使用subprocess.run捕获命令输出
         result = subprocess.run(command, shell=True, check=True, capture_output=True, text=True)
         # 返回命令的标准输出
-        stdout_log = "Downloading".join([x for x in result.stdout.split('Downloading') if '━━' not in x])
+        if "pip install" in command:
+            stdout_log = "\n".join([x for x in result.stdout.split('\n') if '━━' not in x])
+        else:
+            stdout_log = result.stdout
         return f"执行命令成功:\n{stdout_log}"
     except subprocess.CalledProcessError as e:
         # 如果命令执行失败，返回错误信息和错误输出
