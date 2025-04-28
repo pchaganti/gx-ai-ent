@@ -540,10 +540,11 @@ class chatgpt(BaseLLM):
                 if tool_name == "read_file" and "<read_file error>" not in tool_response:
                     self.latest_file_content[tool_info['parameter']["file_path"]] = tool_response
                     all_responses.append(f"[{tool_name}({tool_args}) Result]:\n\nRead file successfully! The file content has been updated in the tag <latest_file_content>.")
-                # elif tool_name == "write_to_file":
-                #     tool_info['parameter']["content"] = "...文件已写入，内容已省略以节省上下文..."
-                #     tool_args = json.dumps(tool_info['parameter'], ensure_ascii=False) if not isinstance(tool_info['parameter'], str) else tool_info['parameter']
-                #     all_responses.append(f"[{tool_name}({tool_args}) Result]:\n\n{tool_response}")
+                elif tool_name == "write_to_file":
+                    # change_tools_args = copy.deepcopy(tool_info['parameter'])
+                    # change_tools_args["content"] = "...文件已写入，内容已省略以节省上下文..."
+                    # tool_args = json.dumps(change_tools_args, ensure_ascii=False) if not isinstance(change_tools_args, str) else change_tools_args
+                    all_responses.append(f"[{tool_name} Result]:\n\n{tool_response}")
                 else:
                     all_responses.append(f"[{tool_name}({tool_args}) Result]:\n\n{tool_response}")
 
