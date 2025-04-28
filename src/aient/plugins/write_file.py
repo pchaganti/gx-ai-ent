@@ -44,6 +44,9 @@ Example: Requesting to write to frontend-config.json
     # 确保目录存在
     os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
 
+    if content.startswith("## ") and path.endswith(".md"):
+        content = "\n\n" + content
+
     # 写入文件
     with open(path, mode, encoding='utf-8') as file:
         file.write(content)
