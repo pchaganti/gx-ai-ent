@@ -431,37 +431,27 @@ class chatgpt(BaseLLM):
 
         function_parameter = parse_function_xml(full_response)
         if function_parameter:
-            print("function_parameter1", function_parameter)
-            function_parameter = [tool_dict for tool_dict in function_parameter if tool_dict.get("function_name", "") in self.plugins.keys()]
             invalid_tools = [tool_dict for tool_dict in function_parameter if tool_dict.get("function_name", "") not in self.plugins.keys()]
+            function_parameter = [tool_dict for tool_dict in function_parameter if tool_dict.get("function_name", "") in self.plugins.keys()]
             for tool_dict in invalid_tools:
                 full_response = full_response + f"\n\nFunction: {tool_dict.get('function_name', '')} does not exist! I must use existing functions. I need to try again."
-            print("function_parameter2", self.print_log, function_parameter)
-            if self.print_log:
+            if self.print_log and invalid_tools:
                 print("invalid_tools", invalid_tools)
+                print("function_parameter", function_parameter)
                 print("full_response", full_response)
             if function_parameter:
                 need_function_call = True
             else:
                 need_function_call = False
                 if self.print_log:
-                    print("Failed to parse function_parameter", function_parameter)
-                    print("full_response", full_response)
-                full_response = (
-                    f"{full_response}"
-                    "\n\nFailed to parse function parameter, I need to try again."
-                )
+                    print("Failed to parse function_parameter full_response", full_response)
+                full_response = ""
 
         # 处理函数调用
         if need_function_call and self.use_plugins != False:
             if self.print_log:
                 print("function_parameter", function_parameter)
                 print("function_full_response", function_full_response)
-
-            function_parameter = [tool_dict for tool_dict in function_parameter if tool_dict.get("function_name", "") in self.plugins.keys()]
-
-            if self.print_log:
-                print("function_parameter3", function_parameter)
 
             function_response = ""
             # 定义处理单个工具调用的辅助函数
