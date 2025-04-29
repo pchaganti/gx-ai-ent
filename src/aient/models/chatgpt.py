@@ -431,10 +431,12 @@ class chatgpt(BaseLLM):
 
         function_parameter = parse_function_xml(full_response)
         if function_parameter:
+            print("function_parameter1", function_parameter)
             function_parameter = [tool_dict for tool_dict in function_parameter if tool_dict.get("function_name", "") in self.plugins.keys()]
             invalid_tools = [tool_dict for tool_dict in function_parameter if tool_dict.get("function_name", "") not in self.plugins.keys()]
             for tool_dict in invalid_tools:
                 full_response = full_response + f"\n\nFunction: {tool_dict.get('function_name', '')} does not exist! I must use existing functions. I need to try again."
+            print("function_parameter2", self.print_log, function_parameter)
             if self.print_log:
                 print("invalid_tools", invalid_tools)
                 print("full_response", full_response)
@@ -455,6 +457,11 @@ class chatgpt(BaseLLM):
             if self.print_log:
                 print("function_parameter", function_parameter)
                 print("function_full_response", function_full_response)
+
+            function_parameter = [tool_dict for tool_dict in function_parameter if tool_dict.get("function_name", "") in self.plugins.keys()]
+
+            if self.print_log:
+                print("function_parameter3", function_parameter)
 
             function_response = ""
             # 定义处理单个工具调用的辅助函数
@@ -552,7 +559,7 @@ class chatgpt(BaseLLM):
                     all_responses.append(f"[{tool_name}({tool_args}) Result]:\n\n{tool_response}")
 
             # 合并所有工具响应
-            function_response = "\n\n".join(all_responses)
+            function_response = "\n\n".join(all_responses).strip()
 
             # 使用第一个工具的名称和参数作为历史记录
             function_call_name = tool_calls[0]['function_name']
