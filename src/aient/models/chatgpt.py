@@ -431,10 +431,13 @@ class chatgpt(BaseLLM):
 
         function_parameter = parse_function_xml(full_response)
         if function_parameter:
-            for tool_dict in function_parameter:
-                if tool_dict.get("function_name", "") not in self.plugins.keys():
-                    function_parameter.remove(tool_dict)
-                    full_response = full_response + f"\n\nFunction: {tool_dict.get('function_name', '')} does not exist! I must use existing functions. I need to try again."
+            function_parameter = [tool_dict for tool_dict in function_parameter if tool_dict.get("function_name", "") in self.plugins.keys()]
+            invalid_tools = [tool_dict for tool_dict in function_parameter if tool_dict.get("function_name", "") not in self.plugins.keys()]
+            for tool_dict in invalid_tools:
+                full_response = full_response + f"\n\nFunction: {tool_dict.get('function_name', '')} does not exist! I must use existing functions. I need to try again."
+            if self.print_log:
+                print("invalid_tools", invalid_tools)
+                print("full_response", full_response)
             if function_parameter:
                 need_function_call = True
             else:

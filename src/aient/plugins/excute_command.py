@@ -39,8 +39,12 @@ def excute_command(command):
             stdout_log = result.stdout
         return f"执行命令成功:\n{stdout_log}"
     except subprocess.CalledProcessError as e:
+        if "pip install" in command:
+            stdout_log = "\n".join([x for x in e.stdout.split('\n') if '━━' not in x])
+        else:
+            stdout_log = e.stdout
         # 如果命令执行失败，返回错误信息和错误输出
-        return f"执行命令失败 (退出码 {e.returncode}):\n错误: {e.stderr}\n输出: {e.stdout}"
+        return f"执行命令失败 (退出码 {e.returncode}):\n错误: {e.stderr}\n输出: {stdout_log}"
     except Exception as e:
         return f"执行命令时发生异常: {e}"
 
