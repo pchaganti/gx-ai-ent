@@ -125,9 +125,9 @@ class chatgpt(BaseLLM):
         # print("role", role, "function_name", function_name, "message", message)
         if convo_id not in self.conversation:
             self.reset(convo_id=convo_id)
-        if function_name == "" and message and message != None:
+        if function_name == "" and message:
             self.conversation[convo_id].append({"role": role, "content": message})
-        elif function_name != "" and message and message != None:
+        elif function_name != "" and message:
             # 删除从 cut_history_by_function_name 以后的所有历史记录
             if function_name == self.cut_history_by_function_name:
                 matching_message = next(filter(lambda x: safe_get(x, "tool_calls", 0, "function", "name", default="") == 'get_next_pdf', self.conversation[convo_id]), None)
@@ -429,26 +429,27 @@ class chatgpt(BaseLLM):
         if response_role is None:
             response_role = "assistant"
 
-        function_parameter = parse_function_xml(full_response)
-        if function_parameter:
-            invalid_tools = [tool_dict for tool_dict in function_parameter if tool_dict.get("function_name", "") not in self.plugins.keys()]
-            function_parameter = [tool_dict for tool_dict in function_parameter if tool_dict.get("function_name", "") in self.plugins.keys()]
-            for tool_dict in invalid_tools:
-                full_response = full_response + f"\n\nFunction: {tool_dict.get('function_name', '')} does not exist! I must use existing functions. I need to try again."
-            if self.print_log and invalid_tools:
-                print("invalid_tools", invalid_tools)
-                print("function_parameter", function_parameter)
-                print("full_response", full_response)
+        if self.use_plugins == True:
+            function_parameter = parse_function_xml(full_response)
             if function_parameter:
-                need_function_call = True
-            else:
-                need_function_call = False
-                if self.print_log:
-                    print("Failed to parse function_parameter full_response", full_response)
-                full_response = ""
+                invalid_tools = [tool_dict for tool_dict in function_parameter if tool_dict.get("function_name", "") not in self.plugins.keys()]
+                function_parameter = [tool_dict for tool_dict in function_parameter if tool_dict.get("function_name", "") in self.plugins.keys()]
+                for tool_dict in invalid_tools:
+                    full_response = full_response + f"\n\nFunction: {tool_dict.get('function_name', '')} does not exist! I must use existing functions. I need to try again."
+                if self.print_log and invalid_tools:
+                    print("invalid_tools", invalid_tools)
+                    print("function_parameter", function_parameter)
+                    print("full_response", full_response)
+                if function_parameter:
+                    need_function_call = True
+                else:
+                    need_function_call = False
+                    if self.print_log:
+                        print("Failed to parse function_parameter full_response", full_response)
+                    full_response = ""
 
         # 处理函数调用
-        if need_function_call and self.use_plugins != False:
+        if need_function_call and self.use_plugins == True:
             if self.print_log:
                 print("function_parameter", function_parameter)
                 print("function_full_response", function_full_response)
