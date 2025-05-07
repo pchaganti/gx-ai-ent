@@ -1,6 +1,7 @@
 import subprocess
 from .registry import register_tool
 
+import re
 import html
 
 def unescape_html(input_string: str) -> str:
@@ -14,6 +15,32 @@ def unescape_html(input_string: str) -> str:
     转换后的字符串。
   """
   return html.unescape(input_string)
+
+def get_python_executable(command: str) -> str:
+    """
+    获取 Python 可执行文件的路径。
+
+    Returns:
+        str: Python 可执行文件的路径。
+    """
+    cmd_parts = command.split(None, 1)
+    if cmd_parts:
+        executable = cmd_parts[0]
+        args_str = cmd_parts[1] if len(cmd_parts) > 1 else ""
+
+        # 检查是否是 python 可执行文件 (如 python, python3, pythonX.Y)
+        is_python_exe = False
+        if executable == "python" or re.match(r"^python[23]?(\.\d+)?$", executable):
+            is_python_exe = True
+
+        if is_python_exe:
+            # 检查参数中是否已经有 -u 选项
+            args_list = args_str.split()
+            has_u_option = "-u" in args_list
+            if not has_u_option:
+                if args_str:
+                    command = f"{executable} -u {args_str}"
+    return command
 
 # 执行命令
 @register_tool()
@@ -30,6 +57,9 @@ def excute_command(command):
     """
     try:
         command = unescape_html(command) # 保留 HTML 解码
+
+        command = get_python_executable(command)
+
 
         # 使用 Popen 以便实时处理输出
         # bufsize=1 表示行缓冲, universal_newlines=True 与 text=True 效果类似，用于文本模式
@@ -106,9 +136,9 @@ if __name__ == "__main__":
     # print(excute_command(long_running_command_unix))
 
 
-    long_running_command_unix = "pip install torch"
-    print(f"执行: {long_running_command_unix}")
-    print(excute_command(long_running_command_unix))
+    # long_running_command_unix = "pip install torch"
+    # print(f"执行: {long_running_command_unix}")
+    # print(excute_command(long_running_command_unix))
 
 
 #     python_long_task_command = """
@@ -118,5 +148,5 @@ if __name__ == "__main__":
 #     print(f"执行: {python_long_task_command}")
 #     print(excute_command(python_long_task_command))
 
-
+    print(get_python_executable("python -c 'print(123)'"))
 # python -m beswarm.aient.src.aient.plugins.excute_command
