@@ -19,35 +19,104 @@ def unescape_html(input_string: str) -> str:
 @register_tool()
 def excute_command(command):
     """
-执行命令并返回输出结果
+执行命令并返回输出结果 (标准输出会实时打印到控制台)
 禁止用于查看pdf，禁止使用 pdftotext 命令
 
 参数:
     command: 要执行的命令，可以克隆仓库，安装依赖，运行代码等
 
 返回:
-    命令执行的输出结果或错误信息
+    命令执行的最终状态和收集到的输出/错误信息
     """
     try:
-        # 使用subprocess.run捕获命令输出
-        command = unescape_html(command)
-        result = subprocess.run(command, shell=True, check=True, capture_output=True, text=True)
-        # 返回命令的标准输出
-        if "pip install" in command:
-            stdout_log = "\n".join([x for x in result.stdout.split('\n') if '━━' not in x])
+        command = unescape_html(command) # 保留 HTML 解码
+
+        # 使用 Popen 以便实时处理输出
+        # bufsize=1 表示行缓冲, universal_newlines=True 与 text=True 效果类似，用于文本模式
+        process = subprocess.Popen(
+            command,
+            shell=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1,
+            universal_newlines=True
+        )
+
+        stdout_lines = []
+
+        # 实时打印 stdout
+        # print(f"--- 开始执行命令: {command} ---")
+        if process.stdout:
+            for line in iter(process.stdout.readline, ''):
+                # 对 pip install 命令的输出进行过滤，去除进度条相关的行
+                if "pip install" in command and '━━' in line:
+                    continue
+                print(line, end='', flush=True) # 实时打印到控制台，并刷新缓冲区
+                stdout_lines.append(line) # 收集行以供后续返回
+            process.stdout.close()
+        # print(f"\n--- 命令实时输出结束 ---")
+
+        # 等待命令完成
+        process.wait()
+
+        # 获取 stderr (命令完成后一次性读取)
+        stderr_output = ""
+        if process.stderr:
+            stderr_output = process.stderr.read()
+            process.stderr.close()
+
+        # 组合最终的 stdout 日志 (已经过 pip install 过滤)
+        final_stdout_log = "".join(stdout_lines)
+
+        if process.returncode == 0:
+            return f"执行命令成功:\n{final_stdout_log}"
         else:
-            stdout_log = result.stdout
-        return f"执行命令成功:\n{stdout_log}"
-    except subprocess.CalledProcessError as e:
-        if "pip install" in command:
-            stdout_log = "\n".join([x for x in e.stdout.split('\n') if '━━' not in x])
-        else:
-            stdout_log = e.stdout
-        # 如果命令执行失败，返回错误信息和错误输出
-        return f"执行命令失败 (退出码 {e.returncode}):\n错误: {e.stderr}\n输出: {stdout_log}"
+            return f"执行命令失败 (退出码 {process.returncode}):\n错误: {stderr_output}\n输出: {final_stdout_log}"
+
+    except FileNotFoundError:
+        # 当 shell=True 时，命令未找到通常由 shell 处理，并返回非零退出码。
+        # 此处捕获 FileNotFoundError 主要用于 Popen 自身无法启动命令的场景 (例如 shell 本身未找到)。
+        return f"执行命令失败: 命令或程序未找到 ({command})"
     except Exception as e:
+        # 其他未知异常
         return f"执行命令时发生异常: {e}"
 
 if __name__ == "__main__":
-    print(excute_command("ls -l && echo 'Hello, World!'"))
-    print(excute_command("ls -l &amp;&amp; echo 'Hello, World!'"))
+    # print(excute_command("ls -l && echo 'Hello, World!'"))
+    # print(excute_command("ls -l &amp;&amp; echo 'Hello, World!'"))
+
+#     tqdm_script = """
+# import time
+# from tqdm import tqdm
+
+# for i in range(10):
+#     print(f"TQDM 进度条测试: {i}")
+#     time.sleep(1)
+# print('\\n-------TQDM 任务完成.')
+# """
+#     processed_tqdm_script = tqdm_script.replace('"', '\\"')
+#     tqdm_command = f"python -u -u -c \"{processed_tqdm_script}\""
+#     # print(f"执行: {tqdm_command}")
+#     print(excute_command(tqdm_command))
+
+
+    # long_running_command_unix = "echo '开始长时间任务...' && for i in 1 2 3; do echo \"正在处理步骤 $i/3...\"; sleep 1; done && echo '长时间任务完成!'"
+    # print(f"执行: {long_running_command_unix}")
+    # print(excute_command(long_running_command_unix))
+
+
+    long_running_command_unix = "pip install torch"
+    print(f"执行: {long_running_command_unix}")
+    print(excute_command(long_running_command_unix))
+
+
+#     python_long_task_command = """
+# python -c "import time; print('Python 长时间任务启动...'); [print(f'Python 任务进度: {i+1}/3', flush=True) or time.sleep(1) for i in range(3)]; print('Python 长时间任务完成.')"
+# """
+#     python_long_task_command = python_long_task_command.strip() # 移除可能的前后空白
+#     print(f"执行: {python_long_task_command}")
+#     print(excute_command(python_long_task_command))
+
+
+# python -m beswarm.aient.src.aient.plugins.excute_command
