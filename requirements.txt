@@ -3,7 +3,6 @@ httpx
 pillow
 msgspec
 fastapi
-PyExecJS
 requests
 html2text
 httpx-socks

@@ -5,7 +5,6 @@ import requests
 import threading
 import time as record_time
 from itertools import islice
-from bs4 import BeautifulSoup
 from .registry import register_tool
 
 class ThreadWithReturnValue(threading.Thread):
@@ -17,11 +16,7 @@ class ThreadWithReturnValue(threading.Thread):
         super().join()
         return self._return
 
-import re
 import httpx
-import lxml.html
-from lxml_html_clean import Cleaner
-from html2text import HTML2Text
 from textwrap import dedent
 
 def url_to_markdown(url):
@@ -33,6 +28,7 @@ def url_to_markdown(url):
                 return "抱歉，目前无法访问该网页。"
             # body = lxml.html.fromstring(text).xpath('//body')
 
+            import lxml.html
             doc = lxml.html.fromstring(text)
             # 检查是否是GitHub raw文件格式（body > pre）
             if doc.xpath('//body/pre'):
@@ -44,6 +40,7 @@ def url_to_markdown(url):
                 return f'<pre>{body}</pre>'
                 # return body
             else:
+                from lxml_html_clean import Cleaner
                 body = body[0]
                 body = Cleaner(javascript=True, style=True).clean_html(body)
                 return ''.join(lxml.html.tostring(c, encoding='unicode') for c in body)
@@ -56,6 +53,7 @@ def url_to_markdown(url):
 
     # 将HTML转换为Markdown
     def get_md(cts):
+        from html2text import HTML2Text
         h2t = HTML2Text(bodywidth=5000)
         h2t.ignore_links = True
         h2t.mark_code = True
@@ -82,6 +80,7 @@ def jina_ai_Web_crawler(url: str, isSearch=False) -> str:
     }
     result = ''
     try:
+        from bs4 import BeautifulSoup
         requests.packages.urllib3.disable_warnings()
         url = "https://r.jina.ai/" + url
         response = requests.get(url, headers=headers, verify=False, timeout=5, stream=True)
