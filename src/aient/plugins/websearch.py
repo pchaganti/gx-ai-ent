@@ -6,7 +6,6 @@ import threading
 import time as record_time
 from itertools import islice
 from bs4 import BeautifulSoup
-from duckduckgo_search import DDGS
 from .registry import register_tool
 
 class ThreadWithReturnValue(threading.Thread):
@@ -178,6 +177,7 @@ def get_url_content(url: str) -> str:
 
 def getddgsearchurl(query, max_results=4):
     try:
+        from duckduckgo_search import DDGS
         results = []
         with DDGS() as ddgs:
             ddgs_gen = ddgs.text(query, safesearch='Off', timelimit='y', backend="lite")
