@@ -3,8 +3,7 @@ import json
 import inspect
 
 from .registry import registry
-from ..utils.scripts import cut_message
-from ..utils.prompt import search_key_word_prompt, arxiv_doc_user_prompt
+from ..utils.prompt import search_key_word_prompt
 
 async def get_tools_result_async(function_call_name, function_full_response, function_call_max_tokens, engine, robot, api_key, api_url, use_plugins, model, add_message, convo_id, language):
     function_response = ""
@@ -26,10 +25,7 @@ async def get_tools_result_async(function_call_name, function_full_response, fun
                 yield chunk
             else:
                 function_response = "\n\n".join(chunk)
-            # function_response = yield chunk
-        # function_response = yield from eval(function_call_name)(prompt, keywords)
-        function_call_max_tokens = 32000
-        function_response, text_len = cut_message(function_response, function_call_max_tokens, engine)
+
         if function_response:
             function_response = (
                 f"You need to response the following question: {prompt}. Search results is provided inside <Search_results></Search_results> XML tags. Your task is to think about the question step by step and then answer the above question in {language} based on the Search results provided. Please response in {language} and adopt a style that is logical, in-depth, and detailed. Note: In order to make the answer appear highly professional, you should be an expert in textual analysis, aiming to make the answer precise and comprehensive. Directly response markdown format, without using markdown code blocks. For each sentence quoting search results, a markdown ordered superscript number url link must be used to indicate the source, e.g., [¹](https://www.example.com)"
@@ -40,18 +36,13 @@ async def get_tools_result_async(function_call_name, function_full_response, fun
             ).format(function_response)
         else:
             function_response = "无法找到相关信息，停止使用 tools"
-        # user_prompt = f"You need to response the following question: {prompt}. Search results is provided inside <Search_results></Search_results> XML tags. Your task is to think about the question step by step and then answer the above question in {config.language} based on the Search results provided. Please response in {config.language} and adopt a style that is logical, in-depth, and detailed. Note: In order to make the answer appear highly professional, you should be an expert in textual analysis, aiming to make the answer precise and comprehensive. Directly response markdown format, without using markdown code blocks"
-        # self.add_to_conversation(user_prompt, "user", convo_id=convo_id)
+
     elif function_to_call:
         prompt = json.loads(function_full_response)
         if inspect.iscoroutinefunction(function_to_call):
             function_response = await function_to_call(**prompt)
         else:
             function_response = function_to_call(**prompt)
-        function_response, text_len = cut_message(function_response, function_call_max_tokens, engine)
-
-    # if function_call_name == "download_read_arxiv_pdf":
-    #     add_message(arxiv_doc_user_prompt, "user", convo_id=convo_id)
 
     function_response = (
         f"function_response:{function_response}"

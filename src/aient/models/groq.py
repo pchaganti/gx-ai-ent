@@ -1,7 +1,6 @@
 import os
 import json
 import requests
-import tiktoken
 
 from .base import BaseLLM
 
@@ -51,39 +50,6 @@ class groq(BaseLLM):
         """
         self.conversation[convo_id] = list()
         self.system_prompt = system_prompt or self.system_prompt
-
-    def __truncate_conversation(self, convo_id: str = "default") -> None:
-        """
-        Truncate the conversation
-        """
-        while True:
-            if (
-                self.get_token_count(convo_id) > self.truncate_limit
-                and len(self.conversation[convo_id]) > 1
-            ):
-                # Don't remove the first message
-                self.conversation[convo_id].pop(1)
-            else:
-                break
-
-    def get_token_count(self, convo_id: str = "default") -> int:
-        """
-        Get token count
-        """
-        # tiktoken.model.MODEL_TO_ENCODING["mixtral-8x7b-32768"] = "cl100k_base"
-        encoding = tiktoken.get_encoding("cl100k_base")
-
-        num_tokens = 0
-        for message in self.conversation[convo_id]:
-            # every message follows <im_start>{role/name}\n{content}<im_end>\n
-            num_tokens += 5
-            for key, value in message.items():
-                if value:
-                    num_tokens += len(encoding.encode(value))
-                if key == "name":  # if there's a name, the role is omitted
-                    num_tokens += 5  # role is always required and always 1 token
-        num_tokens += 5  # every reply is primed with <im_start>assistant
-        return num_tokens
 
     def ask_stream(
         self,

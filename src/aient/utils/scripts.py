@@ -1,32 +1,9 @@
 import os
 import json
-import base64
-import tiktoken
 import requests
 import urllib.parse
 
 from ..core.utils import get_image_message
-
-def get_encode_text(text, model_name):
-    tiktoken.get_encoding("cl100k_base")
-    model_name = "gpt-3.5-turbo"
-    encoding = tiktoken.encoding_for_model(model_name)
-    encode_text = encoding.encode(text, disallowed_special=())
-    return encoding, encode_text
-
-def get_text_token_len(text, model_name):
-    encoding, encode_text = get_encode_text(text, model_name)
-    return len(encode_text)
-
-def cut_message(message: str, max_tokens: int, model_name: str):
-    if type(message) != str:
-        message = str(message)
-    encoding, encode_text = get_encode_text(message, model_name)
-    if len(encode_text) > max_tokens:
-        encode_text = encode_text[:max_tokens]
-        message = encoding.decode(encode_text)
-    encode_text = encoding.encode(message, disallowed_special=())
-    return message, len(encode_text)
 
 def get_doc_from_url(url):
     filename = urllib.parse.unquote(url.split("/")[-1])
