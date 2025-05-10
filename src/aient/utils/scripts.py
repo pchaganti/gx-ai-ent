@@ -413,13 +413,15 @@ class XmlMatcher(Generic[R]):
         self._update(chunk)
         return self._pop()
 
-def parse_function_xml(xml_content: str) -> List[Dict[str, Any]]:
+def parse_function_xml(xml_content: str, check_line_start: bool = True) -> List[Dict[str, Any]]:
     """
     解析XML格式的函数调用信息，转换为字典数组格式
     只解析倒数两层XML标签，忽略更高层级的XML标签
+    当 check_line_start 为 True 时，只解析行首的XML标签。
 
     参数:
         xml_content: 包含一个或多个函数调用的XML字符串
+        check_line_start: 布尔值，指示是否只解析行首的XML标签
 
     返回:
         包含所有函数调用信息的字典数组，每个字典包含函数名和参数
@@ -433,6 +435,14 @@ def parse_function_xml(xml_content: str) -> List[Dict[str, Any]]:
         tag_start = xml_content.find("<", position)
         if tag_start == -1:
             break  # 没有找到更多的标签
+
+        # 新增：如果 check_line_start 为 True，检查标签是否在行首
+        # 如果 '<' 不在行首 (即 tag_start > 0 且其前一个字符不是换行符)，
+        # 则将其视为普通文本的一部分，移动 position 并继续搜索
+        if check_line_start:
+            if tag_start > 0 and xml_content[tag_start - 1] != '\n':
+                position = tag_start + 1  # 从 '<' 之后继续搜索
+                continue
 
         # 检查是否是XML标签的开始（不是闭合标签）
         if tag_start + 1 < len(xml_content) and xml_content[tag_start + 1] == '/':
@@ -476,8 +486,8 @@ def parse_function_xml(xml_content: str) -> List[Dict[str, Any]]:
 
         # 如果是普通辅助标签（如tool_call），则在其内部寻找函数调用
         if tag_name in ["tool_call", "function_call", "tool", "function"]:
-            # 递归处理内部内容
-            nested_functions = parse_function_xml(tag_inner_content)
+            # 递归处理内部内容，此时不再检查行首条件
+            nested_functions = parse_function_xml(tag_inner_content, check_line_start=False)
             result_functions.extend(nested_functions)
         else:
             # 将当前标签作为函数名，解析其内部标签作为参数
@@ -646,7 +656,7 @@ def convert_functions_to_xml(functions_list):
 
 if __name__ == "__main__":
 
-    # 运行本文件：python -m aient.utils.scripts
+    # 运行本文件：python -m beswarm.aient.src.aient.utils.scripts
     os.system("clear")
     test_xml = """
 ✅ 好的，我现在读取 `README.md` 文件。
@@ -656,6 +666,7 @@ if __name__ == "__main__":
 </read_file>
 </tool_call>好的，我现在读取 `README.md` 文件。
 """
+    test_xml = """首先使用read_file工具读取论文内容，然后使用excute_command工具克隆代码仓库到本地。\n```xml\n<read_file>\n<file_path>/Users/yanyuming/Downloads/GitHub/OceanSynthesis/papers/2412.06410v1.pdf</file_path>\n</read_file>\n\n<excute_command>\n<command>git clone https://github.com/bartbussmann/BatchTopK.git</command>\n</excute_command>\n```"""
     test_xml = """
 ✅ 好的，我现在读取 `README.md` 文件。
 <read_file>
@@ -670,8 +681,7 @@ if __name__ == "__main__":
 <file_path>README.md</file_path>
 </read_file>
 </tool_call>
-好的，我现在读取 `README.md` 文件。
+好的，我现在读取 `README.md` 文件。`<answer> </answer>`
 """
 
-    test_xml = """首先使用read_file工具读取论文内容，然后使用excute_command工具克隆代码仓库到本地。\n```xml\n<read_file>\n<file_path>/Users/yanyuming/Downloads/GitHub/OceanSynthesis/papers/2412.06410v1.pdf</file_path>\n</read_file>\n\n<excute_command>\n<command>git clone https://github.com/bartbussmann/BatchTopK.git</command>\n</excute_command>\n```"""
     print(parse_function_xml(test_xml))

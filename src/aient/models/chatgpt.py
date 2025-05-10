@@ -439,8 +439,6 @@ class chatgpt(BaseLLM):
             if function_parameter:
                 invalid_tools = [tool_dict for tool_dict in function_parameter if tool_dict.get("function_name", "") not in self.plugins.keys()]
                 function_parameter = [tool_dict for tool_dict in function_parameter if tool_dict.get("function_name", "") in self.plugins.keys()]
-                for tool_dict in invalid_tools:
-                    full_response = full_response + f"\n\nFunction: {tool_dict.get('function_name', '')} does not exist! I must use existing functions. I need to try again."
                 if self.print_log and invalid_tools:
                     print("invalid_tools", invalid_tools)
                     print("function_parameter", function_parameter)
