@@ -150,8 +150,12 @@ class chatgpt(BaseLLM):
                     })
                 self.conversation[convo_id].append({"role": role, "tool_call_id": function_call_id, "content": message})
             else:
-                self.conversation[convo_id].append({"role": "assistant", "content": convert_functions_to_xml(function_arguments)})
-                self.conversation[convo_id].append({"role": "user", "content": message})
+                last_user_message = self.conversation[convo_id][-1]["content"]
+                if last_user_message != message:
+                    self.conversation[convo_id].append({"role": "assistant", "content": convert_functions_to_xml(function_arguments)})
+                    self.conversation[convo_id].append({"role": "user", "content": message})
+                else:
+                    self.conversation[convo_id].append({"role": "assistant", "content": "我已经执行过这个工具了，接下来我需要做什么？"})
 
         else:
             print('\033[31m')
@@ -430,6 +434,7 @@ class chatgpt(BaseLLM):
             response_role = "assistant"
 
         if self.use_plugins == True:
+            full_response = full_response.replace("<tool_code>", "").replace("</tool_code>", "")
             function_parameter = parse_function_xml(full_response)
             if function_parameter:
                 invalid_tools = [tool_dict for tool_dict in function_parameter if tool_dict.get("function_name", "") not in self.plugins.keys()]
