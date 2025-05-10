@@ -71,15 +71,19 @@ Answer the user's request using the relevant tool(s), if they are available. Che
 
 You have tools at your disposal to solve the coding task. Follow these rules regarding tool calls:
 
-Tool uses are formatted using XML-style tags. The tool name is enclosed in opening and closing tags, and each parameter is similarly enclosed within its own set of tags. Here's the structure:
+Tool uses are formatted using XML-style tags.
+The **actual name of the tool** (e.g., `read_file`, `edit_file`) must be used as the main XML tag.
+Do **NOT** use literal placeholder strings like `<tool_name>`, `<parameter1_name>`, or `<tool_name1>` as actual XML tags. These are for illustration only. Always use the specific tool name and its defined parameter names.
 
-<tool_name>
-<parameter1_name>value1</parameter1_name>
-<parameter2_name>value2</parameter2_name>
+Here's how to structure a single tool call. Replace `actual_tool_name_here` with the specific tool's name, and `parameter_name` with actual parameter names for that tool:
+
+<actual_tool_name_here>
+<parameter_name>value</parameter_name>
+<another_parameter_name>another_value</another_parameter_name>
 ...
-</tool_name>
+</actual_tool_name_here>
 
-For example:
+For example, to use the `read_file` tool:
 
 <read_file>
 <file_path>
@@ -87,18 +91,18 @@ For example:
 </file_path>
 </read_file>
 
-you can call multiple tools in one turn, for example:
+If you need to call multiple tools in one turn, list each tool call's XML structure sequentially. For example:
 
-<tool_name1>
+<actual_tool_name1_here>
 <parameter1_name>value1</parameter1_name>
 ...
-</tool_name1>
+</actual_tool_name1_here>
 
 ...
-<tool_name2>
+<actual_tool_name2_here>
 <parameter1_name>value1</parameter1_name>
 ...
-</tool_name2>
+</actual_tool_name2_here>
 
 When calling tools in parallel, multiple different or the same tools can be invoked simultaneously. 你可以同时执行这两个或者多个操作。
 
@@ -161,34 +165,36 @@ instruction_system_prompt = """
 
 工具使用规范如下：
 
-Tool uses are formatted using XML-style tags. The tool name is enclosed in opening and closing tags, and each parameter is similarly enclosed within its own set of tags. Here's the structure:
+Tool uses are formatted using XML-style tags.
+The **actual name of the tool** (e.g., `read_file`, `edit_file`) must be used as the main XML tag.
+Do **NOT** use literal placeholder strings like `<tool_name>`, `<parameter1_name>`, or `<tool_name1>` as actual XML tags. These are for illustration only. Always use the specific tool name and its defined parameter names.
 
-<tool_name>
-<parameter1_name>value1</parameter1_name>
-<parameter2_name>value2</parameter2_name>
+Here's how to structure a single tool call. Replace `actual_tool_name_here` with the specific tool's name, and `parameter_name` with actual parameter names for that tool:
+
+<actual_tool_name_here>
+<parameter_name>value</parameter_name>
+<another_parameter_name>another_value</another_parameter_name>
 ...
-</tool_name>
+</actual_tool_name_here>
 
-For example:
+For example, to use the `read_file` tool:
 
 <read_file>
-<file_path>
-/path/to/file.txt
-</file_path>
+<file_path>/path/to/file.txt</file_path>
 </read_file>
 
-you can call multiple tools in one turn, for example:
+If you need to call multiple tools in one turn, list each tool call's XML structure sequentially. For example:
 
-<tool_name1>
+<actual_tool_name1_here>
 <parameter1_name>value1</parameter1_name>
 ...
-</tool_name1>
+</actual_tool_name1_here>
 
 ...
-<tool_name2>
+<actual_tool_name2_here>
 <parameter1_name>value1</parameter1_name>
 ...
-</tool_name2>
+</actual_tool_name2_here>
 
 When calling tools in parallel, multiple different or the same tools can be invoked simultaneously.
 
@@ -211,7 +217,9 @@ git clone https://github.com/username/project-name.git
 </excute_command>
 
 工作智能体仅可以使用如下工具：
+<tools>
 {tools_list}
+</tools>
 """
 
 cursor_prompt = """
