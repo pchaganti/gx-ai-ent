@@ -1,5 +1,6 @@
 import os
 import json
+import chardet
 from pdfminer.high_level import extract_text
 
 from .registry import register_tool
@@ -99,9 +100,66 @@ Examples:
             except Exception as e:
                 return f"<read_file error>处理IPython Notebook文件 '{file_path}' 时发生错误: {e}</read_file error>"
         else:
-            # 读取文件内容
-            with open(file_path, 'r', encoding='utf-8') as file:
-                text_content = file.read()
+            # 更新：修改通用文件读取逻辑以支持多种编码
+            # 这部分替换了原有的 else 块内容
+            try:
+                with open(file_path, 'rb') as file: # 以二进制模式读取
+                    raw_data = file.read()
+
+                if not raw_data: # 处理空文件
+                    text_content = ""
+                else:
+                    detected_info = chardet.detect(raw_data)
+                    primary_encoding_to_try = detected_info['encoding']
+                    confidence = detected_info['confidence']
+
+                    decoded_successfully = False
+
+                    # 尝试1: 使用检测到的编码 (如果置信度高且编码有效)
+                    if primary_encoding_to_try and confidence > 0.7: # 您可以根据需要调整置信度阈值
+                        try:
+                            text_content = raw_data.decode(primary_encoding_to_try)
+                            decoded_successfully = True
+                        except (UnicodeDecodeError, LookupError): # LookupError 用于处理无效的编码名称
+                            # 解码失败，将尝试后备编码
+                            pass
+
+                    # 尝试2: UTF-8 (如果第一次尝试失败或未进行)
+                    if not decoded_successfully:
+                        try:
+                            text_content = raw_data.decode('utf-8')
+                            decoded_successfully = True
+                        except UnicodeDecodeError:
+                            # 解码失败，将尝试下一个后备编码
+                            pass
+
+                    # 尝试3: UTF-16 (如果之前的尝试都失败)
+                    # 'utf-16' 会处理带BOM的LE/BE编码。若无BOM，则假定为本机字节序。
+                    # chardet 通常能更准确地检测具体的 utf-16le 或 utf-16be。
+                    if not decoded_successfully:
+                        try:
+                            text_content = raw_data.decode('utf-16')
+                            decoded_successfully = True
+                        except UnicodeDecodeError:
+                            # 所有主要尝试都失败
+                            pass
+
+                    if not decoded_successfully:
+                        # 所有尝试均失败后的错误信息
+                        detected_str_part = ""
+                        if primary_encoding_to_try and confidence > 0.7: # 如果有高置信度的检测结果
+                            detected_str_part = f"检测到的编码 '{primary_encoding_to_try}' (置信度 {confidence:.2f}), "
+                        elif primary_encoding_to_try: # 如果有检测结果但置信度低
+                            detected_str_part = f"低置信度检测编码 '{primary_encoding_to_try}' (置信度 {confidence:.2f}), "
+
+                        return f"<read_file error>文件 '{file_path}' 无法解码。已尝试: {detected_str_part}UTF-8, UTF-16。</read_file error>"
+
+            except FileNotFoundError:
+                # 此处不太可能触发 FileNotFoundError，因为函数开头已有 os.path.exists 检查
+                return f"<read_file error>文件 '{file_path}' 在读取过程中未找到。</read_file error>"
+            except Exception as e:
+                # 捕获在此块中可能发生的其他错误，例如未被早期检查捕获的文件读取问题
+                return f"<read_file error>处理通用文件 '{file_path}' 时发生错误: {e}</read_file error>"
 
         # 返回文件内容
         return text_content
@@ -109,7 +167,8 @@ Examples:
     except PermissionError:
         return f"<read_file error>没有权限访问文件 '{file_path}'</read_file error>"
     except UnicodeDecodeError:
-        return f"<read_file error>文件 '{file_path}' 不是文本文件或编码不是UTF-8</read_file error>"
+        # 更新：修改全局 UnicodeDecodeError 错误信息使其更通用
+        return f"<read_file error>文件 '{file_path}' 包含无法解码的字符 (UnicodeDecodeError)。</read_file error>"
     except Exception as e:
         return f"<read_file error>读取文件时发生错误: {e}</read_file error>"
 
