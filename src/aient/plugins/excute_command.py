@@ -3,6 +3,14 @@ from .registry import register_tool
 
 import re
 import html
+import os
+import select
+
+# 检查是否在 Unix-like 系统上 (pty 模块主要用于 Unix)
+IS_UNIX = hasattr(os, 'fork')
+
+if IS_UNIX:
+    import pty
 
 def unescape_html(input_string: str) -> str:
   """
@@ -28,18 +36,18 @@ def get_python_executable(command: str) -> str:
         executable = cmd_parts[0]
         args_str = cmd_parts[1] if len(cmd_parts) > 1 else ""
 
-        # 检查是否是 python 可执行文件 (如 python, python3, pythonX.Y)
         is_python_exe = False
         if executable == "python" or re.match(r"^python[23]?(\.\d+)?$", executable):
             is_python_exe = True
 
         if is_python_exe:
-            # 检查参数中是否已经有 -u 选项
             args_list = args_str.split()
             has_u_option = "-u" in args_list
             if not has_u_option:
                 if args_str:
                     command = f"{executable} -u {args_str}"
+                else:
+                    command = f"{executable} -u" # 如果没有其他参数，也添加 -u
     return command
 
 # 执行命令
@@ -56,60 +64,95 @@ def excute_command(command):
     命令执行的最终状态和收集到的输出/错误信息
     """
     try:
-        command = unescape_html(command) # 保留 HTML 解码
-
+        command = unescape_html(command)
         command = get_python_executable(command)
 
+        output_lines = []
 
-        # 使用 Popen 以便实时处理输出
-        # bufsize=1 表示行缓冲, universal_newlines=True 与 text=True 效果类似，用于文本模式
-        process = subprocess.Popen(
-            command,
-            shell=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            bufsize=1,
-            universal_newlines=True
-        )
+        if IS_UNIX:
+            # 在 Unix-like 系统上使用 pty 以支持 tqdm 等库的 ANSI 转义序列
+            master_fd, slave_fd = pty.openpty()
 
-        stdout_lines = []
+            process = subprocess.Popen(
+                command,
+                shell=True,
+                stdin=subprocess.PIPE, # 提供一个 stdin，即使未使用
+                stdout=slave_fd,
+                stderr=slave_fd, # 将 stdout 和 stderr 合并到 pty
+                close_fds=True, # 在子进程中关闭除 stdin/stdout/stderr 之外的文件描述符
+                # bufsize=1,      # 移除此行：pty 通常处理字节，且 bufsize=1 会导致 stdin 的二进制模式警告
+                # universal_newlines=True # pty 通常处理字节，解码在读取端进行
+            )
+            os.close(slave_fd) # 在父进程中关闭 slave 端
 
-        # 实时打印 stdout
-        # print(f"--- 开始执行命令: {command} ---")
-        if process.stdout:
-            for line in iter(process.stdout.readline, ''):
-                # 对 pip install 命令的输出进行过滤，去除进度条相关的行
-                if "pip install" in command and '━━' in line:
-                    continue
-                print(line, end='', flush=True) # 实时打印到控制台，并刷新缓冲区
-                stdout_lines.append(line) # 收集行以供后续返回
-            process.stdout.close()
-        # print(f"\n--- 命令实时输出结束 ---")
+            # print(f"--- 开始执行命令 (PTY): {command} ---")
+            while True:
+                try:
+                    # 使用 select 进行非阻塞读取
+                    r, _, _ = select.select([master_fd], [], [], 0.1) # 0.1 秒超时
+                    if r:
+                        data_bytes = os.read(master_fd, 1024)
+                        if not data_bytes: # EOF
+                            break
+                        # 尝试解码，如果失败则使用 repr 显示原始字节
+                        try:
+                            data_str = data_bytes.decode(errors='replace')
+                        except UnicodeDecodeError:
+                            data_str = repr(data_bytes) + " (decode error)\n"
 
-        # 等待命令完成
-        process.wait()
+                        print(data_str, end='', flush=True)
+                        output_lines.append(data_str)
+                    # 检查进程是否已结束，避免在进程已退出后 select 仍然阻塞
+                    if process.poll() is not None and not r:
+                        break
+                except OSError: # 当 PTY 关闭时可能会发生
+                    break
+            # print(f"\n--- 命令实时输出结束 (PTY) ---")
+            os.close(master_fd)
+        else:
+            # 在非 Unix 系统上，回退到原始的 subprocess.PIPE 行为
+            # tqdm 进度条可能不会像在终端中那样动态更新
+            process = subprocess.Popen(
+                command,
+                shell=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1,
+                universal_newlines=True
+            )
+            # print(f"--- 开始执行命令 (PIPE): {command} ---")
+            if process.stdout:
+                for line in iter(process.stdout.readline, ''):
+                    print(line, end='', flush=True)
+                    if "pip install" in command and '━━' in line:
+                        continue
+                    output_lines.append(line)
+                process.stdout.close()
+            # print(f"\n--- 命令实时输出结束 (PIPE) ---")
 
-        # 获取 stderr (命令完成后一次性读取)
+        process.wait() # 等待命令完成
+
+        # 在非 PTY 模式下，stderr 需要单独读取
         stderr_output = ""
-        if process.stderr:
+        if not IS_UNIX and process.stderr:
             stderr_output = process.stderr.read()
             process.stderr.close()
 
-        # 组合最终的 stdout 日志 (已经过 pip install 过滤)
-        final_stdout_log = "".join(stdout_lines)
+        final_output_log = "".join(output_lines)
 
         if process.returncode == 0:
-            return f"执行命令成功:\n{final_stdout_log}"
+            return f"执行命令成功:\n{final_output_log}"
         else:
-            return f"执行命令失败 (退出码 {process.returncode}):\n错误: {stderr_output}\n输出: {final_stdout_log}"
+            # 如果是 PTY 模式，stderr 已经包含在 final_output_log 中
+            if IS_UNIX:
+                return f"执行命令失败 (退出码 {process.returncode}):\n输出/错误:\n{final_output_log}"
+            else:
+                return f"执行命令失败 (退出码 {process.returncode}):\n错误: {stderr_output}\n输出: {final_output_log}"
 
     except FileNotFoundError:
-        # 当 shell=True 时，命令未找到通常由 shell 处理，并返回非零退出码。
-        # 此处捕获 FileNotFoundError 主要用于 Popen 自身无法启动命令的场景 (例如 shell 本身未找到)。
         return f"执行命令失败: 命令或程序未找到 ({command})"
     except Exception as e:
-        # 其他未知异常
         return f"执行命令时发生异常: {e}"
 
 if __name__ == "__main__":
@@ -125,10 +168,23 @@ if __name__ == "__main__":
 #     time.sleep(1)
 # print('\\n-------TQDM 任务完成.')
 # """
+
+#     tqdm_script = """
+# import time
+# from tqdm import tqdm
+
+# for i in tqdm(range(10)):
+#     time.sleep(1)
+# """
 #     processed_tqdm_script = tqdm_script.replace('"', '\\"')
-#     tqdm_command = f"python -u -u -c \"{processed_tqdm_script}\""
+#     tqdm_command = f"python -c \"{processed_tqdm_script}\""
 #     # print(f"执行: {tqdm_command}")
 #     print(excute_command(tqdm_command))
+
+
+    tqdm_command = f"pip install requests"
+    # print(f"执行: {tqdm_command}")
+    print(excute_command(tqdm_command))
 
 
     # long_running_command_unix = "echo '开始长时间任务...' && for i in 1 2 3; do echo \"正在处理步骤 $i/3...\"; sleep 1; done && echo '长时间任务完成!'"
@@ -148,5 +204,5 @@ if __name__ == "__main__":
 #     print(f"执行: {python_long_task_command}")
 #     print(excute_command(python_long_task_command))
 
-    print(get_python_executable("python -c 'print(123)'"))
+    # print(get_python_executable("python -c 'print(123)'"))
 # python -m beswarm.aient.src.aient.plugins.excute_command
