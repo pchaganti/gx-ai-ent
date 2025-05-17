@@ -127,6 +127,8 @@ def excute_command(command):
                     print(line, end='', flush=True)
                     if "pip install" in command and '━━' in line:
                         continue
+                    if "git clone" in command and ('Counting objects' in line or 'Resolving deltas' in line or 'Receiving objects' in line or 'Compressing objects' in line):
+                        continue
                     output_lines.append(line)
                 process.stdout.close()
             # print(f"\n--- 命令实时输出结束 (PIPE) ---")
