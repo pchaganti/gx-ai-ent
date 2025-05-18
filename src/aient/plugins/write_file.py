@@ -1,6 +1,19 @@
 from .registry import register_tool
 
 import os
+import html
+
+def unescape_html(input_string: str) -> str:
+  """
+  将字符串中的 HTML 实体（例如 &amp;）转换回其原始字符（例如 &）。
+
+  Args:
+    input_string: 包含 HTML 实体的输入字符串。
+
+  Returns:
+    转换后的字符串。
+  """
+  return html.unescape(input_string)
 
 @register_tool()
 def write_to_file(path, content, mode='w'):
@@ -49,6 +62,30 @@ Example: Requesting to write to frontend-config.json
 
     # 写入文件
     with open(path, mode, encoding='utf-8') as file:
-        file.write(content)
+        file.write(unescape_html(content))
 
     return f"已成功写入文件：{path}"
+
+
+if __name__ == "__main__":
+    text = """
+&lt;!DOCTYPE html&gt;
+&lt;html lang=&quot;zh-CN&quot;&gt;
+&lt;head&gt;
+    &lt;meta charset=&quot;UTF-8&quot;&gt;
+    &lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1.0&quot;&gt;
+    &lt;title&gt;Continuous Thought Machines (CTM) 原理解读&lt;/title&gt;
+    &lt;script&gt;MathJax={chtml:{fontURL:'https://cdn.jsdelivr.net/npm/mathjax@3/es5/output/chtml/fonts/woff-v2'}}&lt;/script&gt;
+    &lt;script src=&quot;https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js&quot; id=&quot;MathJax-script&quot; async&gt;&lt;/script&gt;
+    &lt;script src=&quot;https://cdnjs.cloudflare.com/ajax/libs/viz.js/2.1.2/viz.js&quot; defer&gt;&lt;/script&gt;
+    &lt;script src=&quot;https://cdnjs.cloudflare.com/ajax/libs/viz.js/2.1.2/full.render.js&quot; defer&gt;&lt;/script&gt;
+    &lt;script src=&quot;https://unpkg.com/@panzoom/panzoom@4.5.1/dist/panzoom.min.js&quot; defer&gt;&lt;/script&gt;
+    &lt;link href=&quot;https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css&quot; rel=&quot;stylesheet&quot;/&gt;
+    &lt;link href=&quot;https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Fira+Code:wght@400;500&amp;display=swap&quot; rel=&quot;stylesheet&quot;&gt;
+    &lt;link href=&quot;https://fonts.googleapis.com/icon?family=Material+Icons+Outlined&quot; rel=&quot;stylesheet&quot;&gt;
+&lt;style&gt;
+    """
+    with open("test.txt", "r", encoding="utf-8") as file:
+        content = file.read()
+    print(write_to_file("test.txt", content))
+    # python -m beswarm.aient.src.aient.plugins.write_file
