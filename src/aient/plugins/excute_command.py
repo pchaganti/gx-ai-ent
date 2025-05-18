@@ -35,7 +35,8 @@ def compare_line(line: str) -> bool:
         return False
     similarity = calculate_similarity(line, last_line)
     last_line = line
-    return similarity > 0.9
+    # print(f"similarity: {similarity}")
+    return similarity > 0.89
 
 def unescape_html(input_string: str) -> str:
   """
@@ -130,8 +131,6 @@ def excute_command(command):
                             continue
                         if "git clone" in command and ('Counting objects' in data_str or 'Resolving deltas' in data_str or 'Receiving objects' in data_str or 'Compressing objects' in data_str):
                             continue
-                        if compare_line(data_str):
-                            continue
                         output_lines.append(data_str)
                     # 检查进程是否已结束，避免在进程已退出后 select 仍然阻塞
                     if process.poll() is not None and not r:
@@ -160,8 +159,6 @@ def excute_command(command):
                         continue
                     if "git clone" in command and ('Counting objects' in line or 'Resolving deltas' in line or 'Receiving objects' in line or 'Compressing objects' in line):
                         continue
-                    if compare_line(line):
-                        continue
                     output_lines.append(line)
                 process.stdout.close()
             # print(f"\n--- 命令实时输出结束 (PIPE) ---")
@@ -174,8 +171,21 @@ def excute_command(command):
             stderr_output = process.stderr.read()
             process.stderr.close()
 
-        output_lines.append(last_line)
-        final_output_log = "".join(output_lines)
+        new_output_lines = []
+        output_lines = "".join(output_lines).strip().replace("\\u001b[A", "").replace("\\r", "\r").replace("\\\\", "").replace("\\n", "\n").replace("\r", "+++").replace("\n", "+++")
+        for line in output_lines.split("+++"):
+            if line.strip() == "":
+                continue
+            # aaa = last_line.strip()
+            is_same = compare_line(repr(line.strip()))
+            if not is_same:
+                # print(f"{repr(aaa)}", flush=True)
+                # print(f"{repr(line.strip())}", flush=True)
+                # print(f"is_same: {is_same}", flush=True)
+                # print(f"\n\n\n", flush=True)
+                new_output_lines.append(line)
+        final_output_log = "\n".join(new_output_lines)
+        # print(f"output_lines: {len(new_output_lines)}")
 
         if process.returncode == 0:
             return f"执行命令成功:\n{final_output_log}"
@@ -205,18 +215,31 @@ if __name__ == "__main__":
 # print('\\n-------TQDM 任务完成.')
 # """
 
+#     tqdm_script = """
+# import time
+# print("Hello, World!1")
+# print("Hello, World!2")
+# for i in range(10):
+#     print(f"TQDM 进度条测试: {i}")
+#     time.sleep(1)
+# """
+#     processed_tqdm_script = tqdm_script.replace('"', '\\"')
+#     tqdm_command = f"python -c \"{processed_tqdm_script}\""
+#     # print(f"执行: {tqdm_command}")
+#     print(excute_command(tqdm_command))
+
     tqdm_script = """
 import time
-print("Hello, World!1")
-print("Hello, World!2")
-for i in range(10):
-    print(f"TQDM 进度条测试: {i}")
-    time.sleep(1)
+with open("/Users/yanyuming/Downloads/GitHub/beswarm/1.txt", "r") as f:
+    content = f.read()
+for i in content.split("\\n"):
+    print(i)
 """
     processed_tqdm_script = tqdm_script.replace('"', '\\"')
     tqdm_command = f"python -c \"{processed_tqdm_script}\""
     # print(f"执行: {tqdm_command}")
     print(excute_command(tqdm_command))
+
 #     tqdm_script = """
 # import time
 # from tqdm import tqdm
