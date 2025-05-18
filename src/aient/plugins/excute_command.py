@@ -12,6 +12,31 @@ IS_UNIX = hasattr(os, 'fork')
 if IS_UNIX:
     import pty
 
+import difflib
+
+last_line = ""
+def calculate_similarity(string1: str, string2: str) -> float:
+    """Calculates the similarity ratio between two strings.
+
+    Args:
+        string1: The first string.
+        string2: The second string.
+
+    Returns:
+        A float between 0 and 1, where 1 means the strings are identical
+        and 0 means they are completely different.
+    """
+    return difflib.SequenceMatcher(None, string1, string2).ratio()
+
+def compare_line(line: str) -> bool:
+    global last_line
+    if last_line == "":
+        last_line = line
+        return False
+    similarity = calculate_similarity(line, last_line)
+    last_line = line
+    return similarity > 0.9
+
 def unescape_html(input_string: str) -> str:
   """
   将字符串中的 HTML 实体（例如 &amp;）转换回其原始字符（例如 &）。
@@ -101,6 +126,12 @@ def excute_command(command):
                             data_str = repr(data_bytes) + " (decode error)\n"
 
                         print(data_str, end='', flush=True)
+                        if "pip install" in command and '━━' in data_str:
+                            continue
+                        if "git clone" in command and ('Counting objects' in data_str or 'Resolving deltas' in data_str or 'Receiving objects' in data_str or 'Compressing objects' in data_str):
+                            continue
+                        if compare_line(data_str):
+                            continue
                         output_lines.append(data_str)
                     # 检查进程是否已结束，避免在进程已退出后 select 仍然阻塞
                     if process.poll() is not None and not r:
@@ -129,6 +160,8 @@ def excute_command(command):
                         continue
                     if "git clone" in command and ('Counting objects' in line or 'Resolving deltas' in line or 'Receiving objects' in line or 'Compressing objects' in line):
                         continue
+                    if compare_line(line):
+                        continue
                     output_lines.append(line)
                 process.stdout.close()
             # print(f"\n--- 命令实时输出结束 (PIPE) ---")
@@ -141,6 +174,7 @@ def excute_command(command):
             stderr_output = process.stderr.read()
             process.stderr.close()
 
+        output_lines.append(last_line)
         final_output_log = "".join(output_lines)
 
         if process.returncode == 0:
@@ -171,6 +205,18 @@ if __name__ == "__main__":
 # print('\\n-------TQDM 任务完成.')
 # """
 
+    tqdm_script = """
+import time
+print("Hello, World!1")
+print("Hello, World!2")
+for i in range(10):
+    print(f"TQDM 进度条测试: {i}")
+    time.sleep(1)
+"""
+    processed_tqdm_script = tqdm_script.replace('"', '\\"')
+    tqdm_command = f"python -c \"{processed_tqdm_script}\""
+    # print(f"执行: {tqdm_command}")
+    print(excute_command(tqdm_command))
 #     tqdm_script = """
 # import time
 # from tqdm import tqdm
@@ -184,9 +230,9 @@ if __name__ == "__main__":
 #     print(excute_command(tqdm_command))
 
 
-    tqdm_command = f"pip install requests"
-    # print(f"执行: {tqdm_command}")
-    print(excute_command(tqdm_command))
+    # tqdm_command = f"pip install requests"
+    # # print(f"执行: {tqdm_command}")
+    # print(excute_command(tqdm_command))
 
 
     # long_running_command_unix = "echo '开始长时间任务...' && for i in 1 2 3; do echo \"正在处理步骤 $i/3...\"; sleep 1; done && echo '长时间任务完成!'"
