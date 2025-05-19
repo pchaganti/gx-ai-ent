@@ -124,10 +124,10 @@ def jina_ai_Web_crawler(url: str, isSearch=False) -> str:
 @register_tool()
 def get_url_content(url: str) -> str:
     """
-    获取 url 的网页内容，以 markdown 格式返回给用户
+获取 url 的网页内容，以 markdown 格式返回给用户
 
-    :param url: 要爬取的网页URL
-    :return: 网页内容
+:param url: 要爬取的网页URL
+:return: 网页内容
     """
     markdown_content = url_to_markdown(url)
     # print(markdown_content)
