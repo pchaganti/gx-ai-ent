@@ -440,7 +440,18 @@ def parse_function_xml(xml_content: str, check_line_start: bool = True) -> List[
         # 如果 '<' 不在行首 (即 tag_start > 0 且其前一个字符不是换行符)，
         # 则将其视为普通文本的一部分，移动 position 并继续搜索
         if check_line_start:
-            if tag_start > 0 and xml_content[tag_start - 1] != '\n':
+            # 检查标签是否在行首，或者行首到标签之间只有空格
+            is_start_of_line_or_only_spaces_before = True
+            if tag_start > 0:
+                # 从 tag_start - 1 向前检查，直到行首或遇到非空格字符
+                check_pos = tag_start - 1
+                while check_pos >= 0 and xml_content[check_pos] != '\n':
+                    if not xml_content[check_pos].isspace():
+                        is_start_of_line_or_only_spaces_before = False
+                        break
+                    check_pos -= 1
+
+            if not is_start_of_line_or_only_spaces_before:
                 position = tag_start + 1  # 从 '<' 之后继续搜索
                 continue
 
@@ -666,15 +677,15 @@ if __name__ == "__main__":
 </read_file>
 </tool_call>好的，我现在读取 `README.md` 文件。
 """
-    test_xml = """首先使用read_file工具读取论文内容，然后使用excute_command工具克隆代码仓库到本地。\n```xml\n<read_file>\n<file_path>/Users/yanyuming/Downloads/GitHub/OceanSynthesis/papers/2412.06410v1.pdf</file_path>\n</read_file>\n\n<excute_command>\n<command>git clone https://github.com/bartbussmann/BatchTopK.git</command>\n</excute_command>\n```"""
+    # test_xml = """首先使用read_file工具读取论文内容，然后使用excute_command工具克隆代码仓库到本地。\n```xml\n<read_file>\n<file_path>/Users/yanyuming/Downloads/GitHub/OceanSynthesis/papers/2412.06410v1.pdf</file_path>\n</read_file>\n\n<excute_command>\n<command>git clone https://github.com/bartbussmann/BatchTopK.git</command>\n</excute_command>\n```"""
     test_xml = """
 ✅ 好的，我现在读取 `README.md` 文件。
-<read_file>
-<file_path>README.md</file_path>
-</read_file>
-<read_file>
-<file_path>README.md</file_path>
-</read_file>
+    <read_file>
+    <file_path>README.md</file_path>
+    </read_file>
+    <read_file>
+    <file_path>README.md</file_path>
+    </read_file>
 
 <tool_call>
 <read_file>
