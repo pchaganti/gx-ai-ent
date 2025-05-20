@@ -152,8 +152,25 @@ class chatgpt(BaseLLM):
             else:
                 last_user_message = self.conversation[convo_id][-1]["content"]
                 if last_user_message != message:
+                    image_message_list = []
+                    if isinstance(function_arguments, str):
+                        functions_list = json.loads(function_arguments)
+                    else:
+                        functions_list = function_arguments
+                    for tool_info in functions_list:
+                        if tool_info.get("base64_image"):
+                            image_message_list.append({"type": "text", "text": safe_get(tool_info, "parameter", "image_path", default="") + " image:"})
+                            image_message_list.append({
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": tool_info["base64_image"],
+                                }
+                            })
                     self.conversation[convo_id].append({"role": "assistant", "content": convert_functions_to_xml(function_arguments)})
-                    self.conversation[convo_id].append({"role": "user", "content": message})
+                    if image_message_list:
+                        self.conversation[convo_id].append({"role": "user", "content": [{"type": "text", "text": message}] + image_message_list})
+                    else:
+                        self.conversation[convo_id].append({"role": "user", "content": message})
                 else:
                     self.conversation[convo_id].append({"role": "assistant", "content": "我已经执行过这个工具了，接下来我需要做什么？"})
 
@@ -545,10 +562,10 @@ class chatgpt(BaseLLM):
                     self.latest_file_content[tool_info['parameter']["file_path"]] = tool_response
                     all_responses.append(f"[{tool_name}({tool_args}) Result]:\n\nRead file successfully! The file content has been updated in the tag <latest_file_content>.")
                 elif tool_name == "write_to_file":
-                    # change_tools_args = copy.deepcopy(tool_info['parameter'])
-                    # change_tools_args["content"] = "...文件已写入，内容已省略以节省上下文..."
-                    # tool_args = json.dumps(change_tools_args, ensure_ascii=False) if not isinstance(change_tools_args, str) else change_tools_args
                     all_responses.append(f"[{tool_name} Result]:\n\n{tool_response}")
+                elif tool_name == "read_image":
+                    tool_info["base64_image"] = tool_response
+                    all_responses.append(f"[{tool_name}({tool_args}) Result]:\n\nRead image successfully!")
                 else:
                     all_responses.append(f"[{tool_name}({tool_args}) Result]:\n\n{tool_response}")
 

@@ -220,6 +220,8 @@ git clone https://github.com/username/project-name.git
 <tools>
 {tools_list}
 </tools>
+
+<work_agent_conversation_start>
 """
 
 cursor_prompt = """

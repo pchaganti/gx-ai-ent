@@ -5,13 +5,13 @@ from .registry import register_tool
 @register_tool()
 def list_directory(path="."):
     """
-    列出指定目录中的所有文件和子目录
+列出指定目录中的所有文件和子目录
 
-    参数:
-        path: 要列出内容的目录路径，默认为当前目录
+参数:
+    path: 要列出内容的目录路径，默认为当前目录
 
-    返回:
-        目录内容的列表字符串
+返回:
+    目录内容的列表字符串
     """
     try:
         # 获取目录内容
