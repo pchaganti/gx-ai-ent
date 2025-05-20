@@ -51,11 +51,11 @@ Examples:
     try:
         # 检查文件是否存在
         if not os.path.exists(file_path):
-            return f"<read_file error>文件 '{file_path}' 不存在</read_file error>"
+            return f"<tool_error>文件 '{file_path}' 不存在</tool_error>"
 
         # 检查是否为文件
         if not os.path.isfile(file_path):
-            return f"<read_file error>'{file_path}' 不是一个文件</read_file error>"
+            return f"<tool_error>'{file_path}' 不是一个文件</tool_error>"
 
         # 检查文件扩展名
         if file_path.lower().endswith('.pdf'):
@@ -64,7 +64,7 @@ Examples:
 
             # 如果提取结果为空
             if not text_content:
-                return f"<read_file error>无法从 '{file_path}' 提取文本内容</read_file error>"
+                return f"<tool_error>无法从 '{file_path}' 提取文本内容</tool_error>"
         elif file_path.lower().endswith('.ipynb'):
             try:
                 with open(file_path, 'r', encoding='utf-8') as file:
@@ -96,9 +96,9 @@ Examples:
 
                 text_content = json.dumps(notebook_content, indent=2, ensure_ascii=False)
             except json.JSONDecodeError:
-                return f"<read_file error>文件 '{file_path}' 不是有效的JSON格式 (IPython Notebook)。</read_file error>"
+                return f"<tool_error>文件 '{file_path}' 不是有效的JSON格式 (IPython Notebook)。</tool_error>"
             except Exception as e:
-                return f"<read_file error>处理IPython Notebook文件 '{file_path}' 时发生错误: {e}</read_file error>"
+                return f"<tool_error>处理IPython Notebook文件 '{file_path}' 时发生错误: {e}</tool_error>"
         else:
             # 更新：修改通用文件读取逻辑以支持多种编码
             # 这部分替换了原有的 else 块内容
@@ -152,25 +152,25 @@ Examples:
                         elif primary_encoding_to_try: # 如果有检测结果但置信度低
                             detected_str_part = f"低置信度检测编码 '{primary_encoding_to_try}' (置信度 {confidence:.2f}), "
 
-                        return f"<read_file error>文件 '{file_path}' 无法解码。已尝试: {detected_str_part}UTF-8, UTF-16。</read_file error>"
+                        return f"<tool_error>文件 '{file_path}' 无法解码。已尝试: {detected_str_part}UTF-8, UTF-16。</tool_error>"
 
             except FileNotFoundError:
                 # 此处不太可能触发 FileNotFoundError，因为函数开头已有 os.path.exists 检查
-                return f"<read_file error>文件 '{file_path}' 在读取过程中未找到。</read_file error>"
+                return f"<tool_error>文件 '{file_path}' 在读取过程中未找到。</tool_error>"
             except Exception as e:
                 # 捕获在此块中可能发生的其他错误，例如未被早期检查捕获的文件读取问题
-                return f"<read_file error>处理通用文件 '{file_path}' 时发生错误: {e}</read_file error>"
+                return f"<tool_error>处理通用文件 '{file_path}' 时发生错误: {e}</tool_error>"
 
         # 返回文件内容
         return text_content
 
     except PermissionError:
-        return f"<read_file error>没有权限访问文件 '{file_path}'</read_file error>"
+        return f"<tool_error>没有权限访问文件 '{file_path}'</tool_error>"
     except UnicodeDecodeError:
         # 更新：修改全局 UnicodeDecodeError 错误信息使其更通用
-        return f"<read_file error>文件 '{file_path}' 包含无法解码的字符 (UnicodeDecodeError)。</read_file error>"
+        return f"<tool_error>文件 '{file_path}' 包含无法解码的字符 (UnicodeDecodeError)。</tool_error>"
     except Exception as e:
-        return f"<read_file error>读取文件时发生错误: {e}</read_file error>"
+        return f"<tool_error>读取文件时发生错误: {e}</tool_error>"
 
 if __name__ == "__main__":
     # python -m beswarm.aient.src.aient.plugins.read_file

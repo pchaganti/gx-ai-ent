@@ -558,12 +558,12 @@ class chatgpt(BaseLLM):
                             tool_response = chunk.replace("function_response:", "")
                         else:
                             yield chunk
-                if tool_name == "read_file" and "<read_file error>" not in tool_response:
+                if tool_name == "read_file" and "<tool_error>" not in tool_response:
                     self.latest_file_content[tool_info['parameter']["file_path"]] = tool_response
                     all_responses.append(f"[{tool_name}({tool_args}) Result]:\n\nRead file successfully! The file content has been updated in the tag <latest_file_content>.")
-                elif tool_name == "write_to_file":
+                elif tool_name == "write_to_file" and "<tool_error>" not in tool_response:
                     all_responses.append(f"[{tool_name} Result]:\n\n{tool_response}")
-                elif tool_name == "read_image":
+                elif tool_name == "read_image" and "<tool_error>" not in tool_response:
                     tool_info["base64_image"] = tool_response
                     all_responses.append(f"[{tool_name}({tool_args}) Result]:\n\nRead image successfully!")
                 else:

@@ -19,17 +19,17 @@ def read_image(image_path: str):
     try:
         # 检查路径是否存在
         if not os.path.exists(image_path):
-            return f"错误: 图片路径 '{image_path}' 不存在。"
+            return f"<tool_error>图片路径 '{image_path}' 不存在。</tool_error>"
         # 检查是否为文件
         if not os.path.isfile(image_path):
-            return f"错误: 路径 '{image_path}' 不是一个有效的文件 (可能是一个目录)。"
+            return f"<tool_error>路径 '{image_path}' 不是一个有效的文件 (可能是一个目录)。</tool_error>"
 
         # 尝试猜测MIME类型
         mime_type, _ = mimetypes.guess_type(image_path) # encoding 变量通常不需要
 
         if not mime_type or not mime_type.startswith('image/'):
             # 如果mimetypes无法识别，或者不是图片类型
-            return f"错误: 文件 '{image_path}' 的MIME类型无法识别为图片 (检测到: {mime_type})。请确保文件是常见的图片格式 (e.g., PNG, JPG, GIF, WEBP)。"
+            return f"<tool_error>文件 '{image_path}' 的MIME类型无法识别为图片 (检测到: {mime_type})。请确保文件是常见的图片格式 (e.g., PNG, JPG, GIF, WEBP)。</tool_error>"
 
         with open(image_path, "rb") as image_file:
             image_data = image_file.read()
@@ -45,10 +45,10 @@ def read_image(image_path: str):
     except FileNotFoundError:
         # 这个异常通常由 open() 抛出，如果 os.path.exists 通过但文件在读取前被删除
         # 或者路径检查逻辑未能完全覆盖所有情况 (理论上不应发生)
-        return f"错误: 图片路径 '{image_path}' 未找到 (可能在检查后被删除或移动)。"
+        return f"<tool_error>图片路径 '{image_path}' 未找到 (可能在检查后被删除或移动)。</tool_error>"
     except PermissionError:
-        return f"错误: 没有权限访问图片路径 '{image_path}'。"
+        return f"<tool_error>没有权限访问图片路径 '{image_path}'。</tool_error>"
     except IOError as e: # 例如文件损坏无法读取，或磁盘问题
-        return f"错误: 读取图片 '{image_path}' 时发生 I/O 错误: {e}"
+        return f"<tool_error>读取图片 '{image_path}' 时发生 I/O 错误: {e}</tool_error>"
     except Exception as e:
-        return f"读取图片 '{image_path}' 时发生未知错误: {e}"
+        return f"<tool_error>读取图片 '{image_path}' 时发生未知错误: {e}</tool_error>"
