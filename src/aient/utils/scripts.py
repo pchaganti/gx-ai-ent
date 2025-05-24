@@ -667,7 +667,6 @@ def convert_functions_to_xml(functions_list):
 
 if __name__ == "__main__":
 
-    # 运行本文件：python -m beswarm.aient.src.aient.utils.scripts
     os.system("clear")
     test_xml = """
 ✅ 好的，我现在读取 `README.md` 文件。
@@ -743,3 +742,5 @@ if __name__ == "__main__":
 """
 
     print(parse_function_xml(test_xml))
+
+# 运行本文件：python -m beswarm.aient.src.aient.utils.scripts

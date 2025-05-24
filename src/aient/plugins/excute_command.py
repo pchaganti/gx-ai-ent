@@ -172,7 +172,8 @@ def excute_command(command):
             process.stderr.close()
 
         new_output_lines = []
-        output_lines = "".join(output_lines).strip().replace("\\u001b[A", "").replace("\\r", "\r").replace("\\\\", "").replace("\\n", "\n").replace("\r", "+++").replace("\n", "+++")
+        output_lines = "".join(output_lines).strip().replace("\\r", "\r").replace("\\\\", "").replace("\\n", "\n").replace("\r", "+++").replace("\n", "+++")
+        output_lines = re.sub(r'\\u001b\[[0-9;]*[a-zA-Z]', '', output_lines)
         for line in output_lines.split("+++"):
             if line.strip() == "":
                 continue
