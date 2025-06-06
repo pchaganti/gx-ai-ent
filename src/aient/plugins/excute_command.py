@@ -178,13 +178,13 @@ def excute_command(command):
             if line.strip() == "":
                 continue
             # aaa = last_line.strip()
-            is_same = compare_line(repr(line.strip()))
-            if not is_same:
-                # print(f"{repr(aaa)}", flush=True)
-                # print(f"{repr(line.strip())}", flush=True)
-                # print(f"is_same: {is_same}", flush=True)
-                # print(f"\n\n\n", flush=True)
-                new_output_lines.append(line)
+            # is_same = compare_line(repr(line.strip()))
+            # if not is_same:
+            #     # print(f"{repr(aaa)}", flush=True)
+            #     # print(f"{repr(line.strip())}", flush=True)
+            #     # print(f"is_same: {is_same}", flush=True)
+            #     # print(f"\n\n\n", flush=True)
+            new_output_lines.append(line)
         # 限制输出行数
         if len(new_output_lines) > 500:
             new_output_lines = new_output_lines[:250] + new_output_lines[-250:]
