@@ -8,10 +8,25 @@ from ..utils.prompt import search_key_word_prompt
 async def get_tools_result_async(function_call_name, function_full_response, function_call_max_tokens, engine, robot, api_key, api_url, use_plugins, model, add_message, convo_id, language):
     function_response = ""
     function_to_call = None
+    call_args = json.loads(function_full_response)
     if function_call_name in registry.tools:
         function_to_call = registry.tools[function_call_name]
+        call_args_name_list = call_args.keys()
+        required_args = registry.tools_info[function_call_name].args
+        invalid_args = [arg_name for arg_name in call_args_name_list if arg_name not in required_args]
+        if invalid_args:
+            function_response = (
+                "function_response:"
+                "<tool_error>"
+                f"无效的参数: {invalid_args}"
+                f"{function_call_name} 只允许使用以下参数: {required_args}"
+                "</tool_error>"
+            )
+            yield function_response
+            return
+
     if function_call_name == "get_search_results":
-        prompt = json.loads(function_full_response)["query"]
+        prompt = call_args["query"]
         yield "message_search_stage_1"
         llm = robot(api_key=api_key, api_url=api_url, engine=engine, use_plugins=use_plugins)
         keywords = (await llm.ask_async(search_key_word_prompt.format(source=prompt), model=model)).split("\n")
@@ -38,11 +53,10 @@ async def get_tools_result_async(function_call_name, function_full_response, fun
             function_response = "无法找到相关信息，停止使用 tools"
 
     elif function_to_call:
-        prompt = json.loads(function_full_response)
         if inspect.iscoroutinefunction(function_to_call):
-            function_response = await function_to_call(**prompt)
+            function_response = await function_to_call(**call_args)
         else:
-            function_response = function_to_call(**prompt)
+            function_response = function_to_call(**call_args)
 
     function_response = (
         f"function_response:{function_response}"

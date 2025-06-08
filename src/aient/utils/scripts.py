@@ -496,7 +496,7 @@ def parse_function_xml(xml_content: str, check_line_start: bool = True) -> List[
         tag_inner_content = xml_content[tag_end+1:end_pos]
 
         # 如果是普通辅助标签（如tool_call），则在其内部寻找函数调用
-        if tag_name in ["tool_call", "function_call", "tool", "function"]:
+        if tag_name in ["tool_call", "function_call", "tool", "function", "tools"]:
             # 递归处理内部内容，此时不再检查行首条件
             nested_functions = parse_function_xml(tag_inner_content, check_line_start=False)
             result_functions.extend(nested_functions)
@@ -740,7 +740,14 @@ if __name__ == "__main__":
 
 请提供前两个 `excute_command` 的执行结果。
 """
-
+    test_xml = """
+好的，我现在执行第一步。
+<tools>
+<list_directory>
+<path>/Downloads/GitHub/beswarm/work/test</path>
+</list_directory>
+</tools>
+"""
     print(parse_function_xml(test_xml))
 
 # 运行本文件：python -m beswarm.aient.src.aient.utils.scripts
