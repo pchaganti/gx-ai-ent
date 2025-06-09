@@ -61,8 +61,11 @@ Example: Requesting to write to frontend-config.json
         content = "\n\n" + content
 
     # 写入文件
-    with open(path, mode, encoding='utf-8') as file:
-        file.write(unescape_html(content))
+    try:
+        with open(path, mode, encoding='utf-8') as file:
+            file.write(unescape_html(content))
+    except PermissionError as e:
+        return f"写入文件失败: {e}"
 
     return f"已成功写入文件：{path}"
 

@@ -1,9 +1,10 @@
 import subprocess
 from .registry import register_tool
+from ..utils.scripts import sandbox
 
 import re
-import html
 import os
+import html
 import select
 
 # 检查是否在 Unix-like 系统上 (pty 模块主要用于 Unix)
@@ -99,17 +100,15 @@ def excute_command(command):
             # 在 Unix-like 系统上使用 pty 以支持 tqdm 等库的 ANSI 转义序列
             master_fd, slave_fd = pty.openpty()
 
-            process = subprocess.Popen(
+            process = sandbox.Popen(
                 command,
                 shell=True,
-                stdin=subprocess.PIPE, # 提供一个 stdin，即使未使用
+                stdin=subprocess.PIPE,
                 stdout=slave_fd,
-                stderr=slave_fd, # 将 stdout 和 stderr 合并到 pty
-                close_fds=True, # 在子进程中关闭除 stdin/stdout/stderr 之外的文件描述符
-                # bufsize=1,      # 移除此行：pty 通常处理字节，且 bufsize=1 会导致 stdin 的二进制模式警告
-                # universal_newlines=True # pty 通常处理字节，解码在读取端进行
+                stderr=slave_fd,
+                close_fds=True,
             )
-            os.close(slave_fd) # 在父进程中关闭 slave 端
+            os.close(slave_fd)
 
             # print(f"--- 开始执行命令 (PTY): {command} ---")
             while True:
@@ -142,7 +141,7 @@ def excute_command(command):
         else:
             # 在非 Unix 系统上，回退到原始的 subprocess.PIPE 行为
             # tqdm 进度条可能不会像在终端中那样动态更新
-            process = subprocess.Popen(
+            process = sandbox.Popen(
                 command,
                 shell=True,
                 stdout=subprocess.PIPE,

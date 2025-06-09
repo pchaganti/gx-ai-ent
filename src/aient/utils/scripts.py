@@ -202,6 +202,158 @@ def parse_tools_from_cursor_prompt(text):
             print(f"解析 JSON 时出错: {e}")
     return []
 
+import sys
+import shlex
+import builtins
+import subprocess
+
+# --- 沙箱配置 ---
+# 从环境变量 'SANDBOX_READONLY_PATHS' 读取只读路径列表（可以是文件或目录）。
+# 示例: export SANDBOX_READONLY_PATHS="/path/to/file.txt:/path/to/dir"
+readonly_paths_str = os.getenv('SANDBOX_READONLY_PATHS', '')
+READONLY_PATHS = [p for p in readonly_paths_str.split(os.pathsep) if p]
+
+# --- 子进程注入代码 (更智能的版本) ---
+INJECTION_CODE = """
+import builtins
+import os
+import sys
+import runpy
+
+# 1. 从环境变量中获取沙箱规则并设置补丁
+# 子进程从和父进程完全相同的环境变量中读取配置
+readonly_paths_str = os.getenv('SANDBOX_READONLY_PATHS', '')
+readonly_paths = [os.path.abspath(p) for p in readonly_paths_str.split(os.pathsep) if p]
+original_open = builtins.open
+
+def _is_path_protected(target_path):
+    abs_target_path = os.path.abspath(target_path)
+    for readonly_path in readonly_paths:
+        if abs_target_path == readonly_path or abs_target_path.startswith(readonly_path + os.sep):
+            return True
+    return False
+
+def _sandboxed_open(file, mode='r', *args, **kwargs):
+    is_write_mode = 'w' in mode or 'a' in mode or 'x' in mode or '+' in mode
+    if is_write_mode and _is_path_protected(file):
+        raise PermissionError(f"路径 '{file}' 被设为只读，禁止写入。")
+    return original_open(file, mode, *args, **kwargs)
+
+builtins.open = _sandboxed_open
+
+# 2. 智能判断原始命令是脚本还是模块，并执行
+original_argv = sys.argv[1:]
+if original_argv and original_argv[0] == '-m':
+    sys.argv = original_argv[1:]
+    runpy.run_module(sys.argv[0], run_name='__main__')
+elif original_argv:
+    target_path = original_argv[0]
+    sys.argv = original_argv
+    # 使用原始的 open 来读取要执行的脚本，因为它本身不应受沙箱限制
+    with original_open(target_path, 'r') as f:
+        code = compile(f.read(), target_path, 'exec')
+        exec(code, {'__name__': '__main__'})
+else:
+    pass
+"""
+
+class Sandbox:
+    """一个通过猴子补丁实现文件访问控制的沙箱，支持向子进程注入。"""
+    def __init__(self, readonly_paths):
+        self._readonly_paths = [os.path.abspath(p) for p in readonly_paths]
+        self._original_open = builtins.open
+        self.is_active = bool(self._readonly_paths) # 如果没有只读路径，则沙箱不激活
+
+    def _is_path_protected(self, target_path):
+        """检查给定路径是否位于或就是只读路径之一"""
+        abs_target_path = os.path.abspath(target_path)
+        for readonly_path in self._readonly_paths:
+            if abs_target_path == readonly_path or abs_target_path.startswith(readonly_path + os.sep):
+                return True
+        return False
+
+    def _sandboxed_open(self, file, mode='r', *args, **kwargs):
+        """我们自己编写的、带安全检查的 open 函数代理"""
+        is_write_mode = 'w' in mode or 'a' in mode or 'x' in mode or '+' in mode
+        if is_write_mode and self._is_path_protected(file):
+            raise PermissionError(f"路径 '{file}' 被设为只读，禁止写入。")
+        return self._original_open(file, mode, *args, **kwargs)
+
+    def enable(self):
+        """应用猴子补丁，全局启用沙箱。"""
+        if not self.is_active:
+            return
+        builtins.open = self._sandboxed_open
+
+    def disable(self):
+        """恢复原始的 open 函数，全局禁用沙箱。"""
+        if not self.is_active:
+            return
+        builtins.open = self._original_open
+
+    def add_readonly_path(self, path: str):
+        """动态添加一个新的只读路径。如果沙箱因此从非激活状态变为激活状态，则会启用沙箱。"""
+        if not path:
+            return "Fail"
+
+        was_active = self.is_active
+
+        abs_path = os.path.abspath(path)
+        if abs_path not in self._readonly_paths:
+            self._readonly_paths.append(abs_path)
+            self.is_active = True # 确保沙箱被激活
+
+        # 如果沙箱之前未激活，但现在因为添加了路径而激活了，则启用它
+        if not was_active and self.is_active:
+            self.enable()
+
+        return "Success"
+
+    def __enter__(self):
+        """进入 'with' 块时，应用猴子补丁"""
+        self.enable()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """退出 'with' 块时，恢复原始的 open 函数"""
+        self.disable()
+
+    def Popen(self, args, **kwargs):
+        """
+        一个 subprocess.Popen 的安全替代品。
+        如果沙箱未激活，则直接调用原始的 Popen。
+        否则，它会向启动的 Python 子进程中注入沙箱逻辑。
+        对于非 Python 命令，它会直接穿透执行并打印警告。
+        """
+        if not self.is_active:
+            return subprocess.Popen(args, **kwargs)
+
+        if kwargs.get('shell') and isinstance(args, str):
+            cmd_list = shlex.split(args)
+        elif isinstance(args, list):
+            cmd_list = args
+        else:
+            cmd_list = [args]
+
+        print(f"\n沙箱：拦截到 Popen 请求: {cmd_list}")
+
+        command_name = os.path.basename(cmd_list[0])
+        # 子进程的沙箱配置由环境变量继承，这里无需再手动设置
+        if command_name.startswith('python'):
+            injected_args = [sys.executable, '-c', INJECTION_CODE] + cmd_list[1:]
+            print(f"沙箱：识别为 Python 命令，构造注入命令...")
+            kwargs_no_shell = kwargs.copy()
+            kwargs_no_shell['shell'] = False
+            return subprocess.Popen(injected_args, **kwargs_no_shell)
+        else:
+            print(f"⚠️ 沙箱警告：命令 '{command_name}' 非 Python 命令，将直接执行，不受沙箱保护。")
+            return subprocess.Popen(args, **kwargs)
+
+# --- 全局沙箱实例 ---
+# 沙箱现在会自动从环境变量中读取配置
+sandbox = Sandbox(readonly_paths=READONLY_PATHS)
+sandbox.enable() # 在模块加载时全局启用沙箱
+
 from dataclasses import dataclass
 from typing import List, Callable, Optional, TypeVar, Generic, Union, Dict, Any
 
