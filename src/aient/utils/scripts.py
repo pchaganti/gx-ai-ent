@@ -241,17 +241,46 @@ def _sandboxed_open(file, mode='r', *args, **kwargs):
 
 builtins.open = _sandboxed_open
 
-# 2. 智能判断原始命令是脚本还是模块，并执行
+# 2. 智能判断原始命令是脚本、模块还是代码字符串，并执行
 original_argv = sys.argv[1:]
-if original_argv and original_argv[0] == '-m':
-    sys.argv = original_argv[1:]
-    runpy.run_module(sys.argv[0], run_name='__main__')
-elif original_argv:
-    target_path = original_argv[0]
-    sys.argv = original_argv
+
+action = None
+action_arg = None
+passthrough_args = []
+i = 0
+while i < len(original_argv):
+    arg = original_argv[i]
+    if arg == '-m':
+        action = 'module'
+        if i + 1 < len(original_argv):
+            action_arg = original_argv[i+1]
+            passthrough_args = original_argv[i+2:]
+        break
+    elif arg == '-c':
+        action = 'command'
+        if i + 1 < len(original_argv):
+            action_arg = original_argv[i+1]
+            passthrough_args = original_argv[i+2:]
+        break
+    elif arg.startswith('-'):
+        i += 1
+    else:
+        action = 'file'
+        action_arg = arg
+        passthrough_args = original_argv[i+1:]
+        break
+
+if action == 'module' and action_arg:
+    sys.argv = [action_arg] + passthrough_args
+    runpy.run_module(action_arg, run_name='__main__')
+elif action == 'command' and action_arg:
+    sys.argv = ['-c'] + passthrough_args
+    exec(action_arg, {'__name__': '__main__'})
+elif action == 'file' and action_arg:
+    sys.argv = [action_arg] + passthrough_args
     # 使用原始的 open 来读取要执行的脚本，因为它本身不应受沙箱限制
-    with original_open(target_path, 'r') as f:
-        code = compile(f.read(), target_path, 'exec')
+    with original_open(action_arg, 'r') as f:
+        code = compile(f.read(), action_arg, 'exec')
         exec(code, {'__name__': '__main__'})
 else:
     pass
