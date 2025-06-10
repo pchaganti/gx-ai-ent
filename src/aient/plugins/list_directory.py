@@ -43,8 +43,8 @@ def list_directory(path="."):
         return result
 
     except FileNotFoundError:
-        return f"错误: 路径 '{path}' 不存在"
+        return f"<tool_error>路径 '{path}' 不存在</tool_error>"
     except PermissionError:
-        return f"错误: 没有权限访问路径 '{path}'"
+        return f"<tool_error>没有权限访问路径 '{path}'</tool_error>"
     except Exception as e:
-        return f"列出目录时发生错误: {e}"
+        return f"<tool_error>列出目录时发生错误: {e}</tool_error>"

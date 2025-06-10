@@ -462,6 +462,10 @@ class chatgpt(BaseLLM):
                     print("full_response", full_response)
                 if function_parameter:
                     need_function_call = True
+                    if isinstance(self.conversation[convo_id][-1]["content"], str) and \
+                    "<tool_error>" in self.conversation[convo_id][-1]["content"]:
+                        need_function_call = False
+                        full_response = "接下来我需要做什么？"
                 else:
                     need_function_call = False
                     if self.print_log:

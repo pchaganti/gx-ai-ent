@@ -129,7 +129,7 @@ if _result is not None:
 
     except Exception as e:
         logging.error(f"Error executing code: {str(e)}")
-        return f"Error: {str(e)}"
+        return f"<tool_error>Error: {str(e)}</tool_error>"
 
     finally:
         try:

@@ -178,18 +178,21 @@ def excute_command(command):
         # print(f"output_lines: {len(new_output_lines)}")
 
         if process.returncode == 0:
-            return f"执行命令成功:\n{final_output_log}"
+            if final_output_log.strip() == "":
+                return f"执行命令成功"
+            else:
+                return f"执行命令成功:\n{final_output_log.strip()}"
         else:
             # 如果是 PTY 模式，stderr 已经包含在 final_output_log 中
             if IS_UNIX:
-                return f"执行命令失败 (退出码 {process.returncode}):\n输出/错误:\n{final_output_log}"
+                return f"<tool_error>执行命令失败 (退出码 {process.returncode}):\n输出/错误:\n{final_output_log}</tool_error>"
             else:
-                return f"执行命令失败 (退出码 {process.returncode}):\n错误: {stderr_output}\n输出: {final_output_log}"
+                return f"<tool_error>执行命令失败 (退出码 {process.returncode}):\n错误: {stderr_output}\n输出: {final_output_log}</tool_error>"
 
     except FileNotFoundError:
-        return f"执行命令失败: 命令或程序未找到 ({command})"
+        return f"<tool_error>执行命令失败: 命令或程序未找到 ({command})</tool_error>"
     except Exception as e:
-        return f"执行命令时发生异常: {e}"
+        return f"<tool_error>执行命令时发生异常: {e}</tool_error>"
 
 if __name__ == "__main__":
     # print(excute_command("ls -l && echo 'Hello, World!'"))
