@@ -16,9 +16,9 @@ async def get_tools_result_async(function_call_name, function_full_response, fun
         invalid_args = [arg_name for arg_name in call_args_name_list if arg_name not in required_args]
         if invalid_args:
             function_response = (
-                "function_response:"
+                "function_response: "
                 "<tool_error>"
-                f"无效的参数: {invalid_args}"
+                f"无效的参数: {invalid_args} "
                 f"{function_call_name} 只允许使用以下参数: {required_args}"
                 "</tool_error>"
             )
