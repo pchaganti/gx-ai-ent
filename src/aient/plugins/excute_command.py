@@ -1,10 +1,9 @@
 import subprocess
 from .registry import register_tool
-from ..utils.scripts import sandbox
+from ..utils.scripts import sandbox, unescape_html
 
 import re
 import os
-import html
 import select
 
 # 检查是否在 Unix-like 系统上 (pty 模块主要用于 Unix)
@@ -38,18 +37,6 @@ def compare_line(line: str) -> bool:
     last_line = line
     # print(f"similarity: {similarity}")
     return similarity > 0.89
-
-def unescape_html(input_string: str) -> str:
-  """
-  将字符串中的 HTML 实体（例如 &amp;）转换回其原始字符（例如 &）。
-
-  Args:
-    input_string: 包含 HTML 实体的输入字符串。
-
-  Returns:
-    转换后的字符串。
-  """
-  return html.unescape(input_string)
 
 def get_python_executable(command: str) -> str:
     """

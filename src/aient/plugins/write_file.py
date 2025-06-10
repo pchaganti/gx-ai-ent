@@ -1,19 +1,7 @@
 from .registry import register_tool
+from ..utils.scripts import unescape_html
 
 import os
-import html
-
-def unescape_html(input_string: str) -> str:
-  """
-  将字符串中的 HTML 实体（例如 &amp;）转换回其原始字符（例如 &）。
-
-  Args:
-    input_string: 包含 HTML 实体的输入字符串。
-
-  Returns:
-    转换后的字符串。
-  """
-  return html.unescape(input_string)
 
 @register_tool()
 def write_to_file(path, content, mode='w'):
