@@ -187,21 +187,6 @@ def async_generator_to_sync(async_gen):
         except Exception as e:
             print(f"Error during cleanup: {e}")
 
-def parse_tools_from_cursor_prompt(text):
-    import json
-    import re
-
-    # 从 cursor_prompt 中提取 <tools> 标签内的 JSON 字符串
-    tools_match = re.search(r"<tools>\n(.*?)\n</tools>", text, re.DOTALL)
-    if tools_match:
-        tools_json_string = tools_match.group(1).strip()
-        try:
-            tools_list_data = json.loads(tools_json_string, strict=False)
-            return tools_list_data
-        except json.JSONDecodeError as e:
-            print(f"解析 JSON 时出错: {e}")
-    return []
-
 import html
 def unescape_html(input_string: str) -> str:
   """
