@@ -235,6 +235,7 @@ import sys
 import shlex
 import builtins
 import subprocess
+import fnmatch
 
 # --- 沙箱配置 ---
 # 从环境变量 'SANDBOX_READONLY_PATHS' 读取只读路径列表（可以是文件或目录）。
@@ -258,7 +259,10 @@ import fnmatch
 # 子进程从和父进程完全相同的环境变量中读取配置
 readonly_paths_str = os.getenv('SANDBOX_READONLY_PATHS', '')
 readonly_paths = [os.path.abspath(p) for p in readonly_paths_str.split(os.pathsep) if p]
-no_read_paths_str = os.getenv('SANDBOX_NO_READ_PATHS', '')
+
+# 优先使用执行命令专用的禁止读取路径
+no_read_paths_str = os.getenv('SANDBOX_EXEC_NO_READ_PATHS', '/**/*beswarm*/**')
+
 no_read_paths = [os.path.abspath(p) for p in no_read_paths_str.split(os.pathsep) if p]
 original_open = builtins.open
 
