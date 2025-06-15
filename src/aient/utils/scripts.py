@@ -1,6 +1,7 @@
 import os
 import re
 import json
+import fnmatch
 import requests
 import urllib.parse
 
@@ -241,30 +242,65 @@ import subprocess
 readonly_paths_str = os.getenv('SANDBOX_READONLY_PATHS', '')
 READONLY_PATHS = [p for p in readonly_paths_str.split(os.pathsep) if p]
 
+# 新增: 从环境变量 'SANDBOX_NO_READ_PATHS' 读取禁止读取的路径列表
+no_read_paths_str = os.getenv('SANDBOX_NO_READ_PATHS', '')
+NO_READ_PATHS = [p for p in no_read_paths_str.split(os.pathsep) if p]
+
 # --- 子进程注入代码 (更智能的版本) ---
 INJECTION_CODE = """
 import builtins
 import os
 import sys
 import runpy
+import fnmatch
 
 # 1. 从环境变量中获取沙箱规则并设置补丁
 # 子进程从和父进程完全相同的环境变量中读取配置
 readonly_paths_str = os.getenv('SANDBOX_READONLY_PATHS', '')
 readonly_paths = [os.path.abspath(p) for p in readonly_paths_str.split(os.pathsep) if p]
+no_read_paths_str = os.getenv('SANDBOX_NO_READ_PATHS', '')
+no_read_paths = [os.path.abspath(p) for p in no_read_paths_str.split(os.pathsep) if p]
 original_open = builtins.open
 
 def _is_path_protected(target_path):
     abs_target_path = os.path.abspath(target_path)
-    for readonly_path in readonly_paths:
-        if abs_target_path == readonly_path or abs_target_path.startswith(readonly_path + os.sep):
-            return True
+    for protected_pattern in readonly_paths:
+        # 检查是否是 glob 模式
+        is_glob = '*' in protected_pattern or '?' in protected_pattern or '[' in protected_pattern
+        if is_glob:
+            if fnmatch.fnmatch(abs_target_path, protected_pattern):
+                return True
+        else:
+            # 兼容旧的精确/目录匹配
+            if abs_target_path == protected_pattern or abs_target_path.startswith(protected_pattern + os.sep):
+                return True
+    return False
+
+def _is_path_no_read(target_path):
+    abs_target_path = os.path.abspath(target_path)
+    for no_read_pattern in no_read_paths:
+        # 检查是否是 glob 模式
+        is_glob = '*' in no_read_pattern or '?' in no_read_pattern or '[' in no_read_pattern
+        if is_glob:
+            if fnmatch.fnmatch(abs_target_path, no_read_pattern):
+                return True
+        else:
+            # 兼容旧的精确/目录匹配
+            if abs_target_path == no_read_pattern or abs_target_path.startswith(no_read_pattern + os.sep):
+                return True
     return False
 
 def _sandboxed_open(file, mode='r', *args, **kwargs):
+    # 检查写保护
     is_write_mode = 'w' in mode or 'a' in mode or 'x' in mode or '+' in mode
     if is_write_mode and _is_path_protected(file):
-        raise PermissionError(f"路径 '{file}' 被设为只读，禁止写入。")
+        raise PermissionError(f"路径 '{file}' 被禁止写入。")
+
+    # 检查读保护 (默认模式是 'r')
+    is_read_mode = 'r' in mode or '+' in mode
+    if is_read_mode and _is_path_no_read(file):
+        raise PermissionError(f"路径 '{file}' 被禁止读取。")
+
     return original_open(file, mode, *args, **kwargs)
 
 builtins.open = _sandboxed_open
@@ -316,24 +352,52 @@ else:
 
 class Sandbox:
     """一个通过猴子补丁实现文件访问控制的沙箱，支持向子进程注入。"""
-    def __init__(self, readonly_paths):
+    def __init__(self, readonly_paths, no_read_paths):
         self._readonly_paths = [os.path.abspath(p) for p in readonly_paths]
+        self._no_read_paths = [os.path.abspath(p) for p in no_read_paths]
         self._original_open = builtins.open
-        self.is_active = bool(self._readonly_paths) # 如果没有只读路径，则沙箱不激活
+        self.is_active = bool(self._readonly_paths or self._no_read_paths) # 如果有任一规则，则沙箱激活
 
     def _is_path_protected(self, target_path):
-        """检查给定路径是否位于或就是只读路径之一"""
+        """检查给定路径是否位于或就是只读路径之一（支持 glob 模式）。"""
         abs_target_path = os.path.abspath(target_path)
-        for readonly_path in self._readonly_paths:
-            if abs_target_path == readonly_path or abs_target_path.startswith(readonly_path + os.sep):
-                return True
+        for protected_pattern in self._readonly_paths:
+            is_glob = '*' in protected_pattern or '?' in protected_pattern or '[' in protected_pattern
+            if is_glob:
+                if fnmatch.fnmatch(abs_target_path, protected_pattern):
+                    return True
+            else:
+                # 兼容旧的精确/目录匹配
+                if abs_target_path == protected_pattern or abs_target_path.startswith(protected_pattern + os.sep):
+                    return True
+        return False
+
+    def _is_path_no_read(self, target_path):
+        """检查给定路径是否位于或就是禁止读取的路径之一（支持 glob 模式）。"""
+        abs_target_path = os.path.abspath(target_path)
+        for no_read_pattern in self._no_read_paths:
+            is_glob = '*' in no_read_pattern or '?' in no_read_pattern or '[' in no_read_pattern
+            if is_glob:
+                if fnmatch.fnmatch(abs_target_path, no_read_pattern):
+                    return True
+            else:
+                # 兼容旧的精确/目录匹配
+                if abs_target_path == no_read_pattern or abs_target_path.startswith(no_read_pattern + os.sep):
+                    return True
         return False
 
     def _sandboxed_open(self, file, mode='r', *args, **kwargs):
         """我们自己编写的、带安全检查的 open 函数代理"""
+        # 检查写保护
         is_write_mode = 'w' in mode or 'a' in mode or 'x' in mode or '+' in mode
         if is_write_mode and self._is_path_protected(file):
-            raise PermissionError(f"路径 '{file}' 被设为只读，禁止写入。")
+            raise PermissionError(f"路径 '{file}' 被禁止写入。")
+
+        # 检查读保护 (默认模式是 'r')
+        is_read_mode = 'r' in mode or '+' in mode
+        if is_read_mode and self._is_path_no_read(file):
+            raise PermissionError(f"路径 '{file}' 被禁止读取。")
+
         return self._original_open(file, mode, *args, **kwargs)
 
     def enable(self):
@@ -348,6 +412,10 @@ class Sandbox:
             return
         builtins.open = self._original_open
 
+    def _update_env_var(self, var_name, path_list):
+        """辅助函数，用于更新环境变量，确保子进程能继承最新的沙箱规则。"""
+        os.environ[var_name] = os.pathsep.join(path_list)
+
     def add_readonly_path(self, path: str):
         """动态添加一个新的只读路径。如果沙箱因此从非激活状态变为激活状态，则会启用沙箱。"""
         if not path:
@@ -358,9 +426,27 @@ class Sandbox:
         abs_path = os.path.abspath(path)
         if abs_path not in self._readonly_paths:
             self._readonly_paths.append(abs_path)
+            self._update_env_var('SANDBOX_READONLY_PATHS', self._readonly_paths)
             self.is_active = True # 确保沙箱被激活
 
         # 如果沙箱之前未激活，但现在因为添加了路径而激活了，则启用它
+        if not was_active and self.is_active:
+            self.enable()
+
+        return "Success"
+
+    def add_no_read_path(self, path: str):
+        """动态添加一个新的禁止读取的路径。"""
+        if not path:
+            return "Fail"
+
+        was_active = self.is_active
+        abs_path = os.path.abspath(path)
+        if abs_path not in self._no_read_paths:
+            self._no_read_paths.append(abs_path)
+            self._update_env_var('SANDBOX_NO_READ_PATHS', self._no_read_paths)
+            self.is_active = True
+
         if not was_active and self.is_active:
             self.enable()
 
@@ -408,7 +494,7 @@ class Sandbox:
 
 # --- 全局沙箱实例 ---
 # 沙箱现在会自动从环境变量中读取配置
-sandbox = Sandbox(readonly_paths=READONLY_PATHS)
+sandbox = Sandbox(readonly_paths=READONLY_PATHS, no_read_paths=NO_READ_PATHS)
 sandbox.enable() # 在模块加载时全局启用沙箱
 
 from dataclasses import dataclass
