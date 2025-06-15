@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import requests
 import urllib.parse
@@ -147,6 +148,35 @@ def safe_get(data, *keys, default=None):
         except (KeyError, IndexError, AttributeError, TypeError):
             return default
     return data
+
+def remove_xml_tags_and_content(text: str) -> str:
+    """
+    删除字符串中所有的XML标签及其包裹的内容。
+    这个函数通过迭代地移除最内层的标签来处理嵌套标签和自闭合标签。
+
+    Args:
+        text: 包含XML标签的输入字符串。
+
+    Returns:
+        清理掉XML标签和内容后的字符串。
+    """
+    # 正则表达式匹配成对的标签及其内容（非贪婪模式）以及自闭合标签
+    # 捕获组 \1 用于确保开始和结束标签名匹配
+    pair_pattern = r'<([a-zA-Z0-9_:]+)\b[^>]*>.*?</\1>'
+    self_closing_pattern = r'<[^>/]+/>'
+
+    cleaned_text = text
+    while True:
+        # 使用 re.sub 替换所有非重叠的匹配项
+        new_text = re.sub(pair_pattern, '', cleaned_text, flags=re.DOTALL)
+        new_text = re.sub(self_closing_pattern, '', new_text)
+
+        # 如果没有更多内容被移除，则退出循环
+        if new_text == cleaned_text:
+            break
+        cleaned_text = new_text
+
+    return cleaned_text.strip()
 
 import asyncio
 def async_generator_to_sync(async_gen):
@@ -919,14 +949,15 @@ if __name__ == "__main__":
 
 请提供前两个 `excute_command` 的执行结果。
 """
-    test_xml = """
-好的，我现在执行第一步。
-<tools>
-<list_directory>
-<path>/Downloads/GitHub/beswarm/work/test</path>
-</list_directory>
-</tools>
-"""
-    print(parse_function_xml(test_xml))
+#     test_xml = """
+# 好的，我现在执行第一步。
+# <tools>
+# <list_directory>
+# <path>/Downloads/GitHub/beswarm/work/test</path>
+# </list_directory>
+# </tools>
+# """
+    # print(parse_function_xml(test_xml))
+    print(remove_xml_tags_and_content(test_xml))
 
 # 运行本文件：python -m beswarm.aient.src.aient.utils.scripts

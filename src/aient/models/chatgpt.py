@@ -12,7 +12,7 @@ from pathlib import Path
 
 from .base import BaseLLM
 from ..plugins import PLUGINS, get_tools_result_async, function_call_list, update_tools_config
-from ..utils.scripts import safe_get, async_generator_to_sync, parse_function_xml, parse_continuous_json, convert_functions_to_xml
+from ..utils.scripts import safe_get, async_generator_to_sync, parse_function_xml, parse_continuous_json, convert_functions_to_xml, remove_xml_tags_and_content
 from ..core.request import prepare_request_payload
 from ..core.response import fetch_response_stream
 
@@ -465,7 +465,7 @@ class chatgpt(BaseLLM):
                     if isinstance(self.conversation[convo_id][-1]["content"], str) and \
                     "<tool_error>" in self.conversation[convo_id][-1]["content"]:
                         need_function_call = False
-                        full_response = "接下来我需要做什么？"
+                        full_response = remove_xml_tags_and_content(full_response) + "上面是我的分析，还没有实际行动。\n\n接下来我需要做什么？"
                 else:
                     need_function_call = False
                     if self.print_log:
