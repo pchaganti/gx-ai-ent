@@ -48,6 +48,9 @@ Example: Requesting to write to frontend-config.json
     if content.startswith("##") and (path.endswith(".md") or path.endswith(".txt")):
         content = "\n\n" + content
 
+    if content.startswith("---\n") and (path.endswith(".md") or path.endswith(".txt")):
+        content = "\n" + content
+
     # 写入文件
     try:
         with open(path, mode, encoding='utf-8') as file:
