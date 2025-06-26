@@ -241,11 +241,11 @@ import fnmatch
 # 从环境变量 'SANDBOX_READONLY_PATHS' 读取只读路径列表（可以是文件或目录）。
 # 示例: export SANDBOX_READONLY_PATHS="/path/to/file.txt:/path/to/dir"
 readonly_paths_str = os.getenv('SANDBOX_READONLY_PATHS', '')
-READONLY_PATHS = [p for p in readonly_paths_str.split(os.pathsep) if p]
+READONLY_PATHS = [p for p in readonly_paths_str.split(':') if p]
 
 # 新增: 从环境变量 'SANDBOX_NO_READ_PATHS' 读取禁止读取的路径列表
 no_read_paths_str = os.getenv('SANDBOX_NO_READ_PATHS', '')
-NO_READ_PATHS = [p for p in no_read_paths_str.split(os.pathsep) if p]
+NO_READ_PATHS = [p for p in no_read_paths_str.split(':') if p]
 
 # --- 子进程注入代码 (更智能的版本) ---
 INJECTION_CODE = """
@@ -258,12 +258,12 @@ import fnmatch
 # 1. 从环境变量中获取沙箱规则并设置补丁
 # 子进程从和父进程完全相同的环境变量中读取配置
 readonly_paths_str = os.getenv('SANDBOX_READONLY_PATHS', '')
-readonly_paths = [os.path.abspath(p) for p in readonly_paths_str.split(os.pathsep) if p]
+readonly_paths = [os.path.abspath(p) for p in readonly_paths_str.split(':') if p]
 
 # 优先使用执行命令专用的禁止读取路径
 no_read_paths_str = os.getenv('SANDBOX_EXEC_NO_READ_PATHS', '/**/*beswarm*/**')
 
-no_read_paths = [os.path.abspath(p) for p in no_read_paths_str.split(os.pathsep) if p]
+no_read_paths = [os.path.abspath(p) for p in no_read_paths_str.split(':') if p]
 original_open = builtins.open
 
 def _is_path_protected(target_path):
@@ -418,7 +418,7 @@ class Sandbox:
 
     def _update_env_var(self, var_name, path_list):
         """辅助函数，用于更新环境变量，确保子进程能继承最新的沙箱规则。"""
-        os.environ[var_name] = os.pathsep.join(path_list)
+        os.environ[var_name] = ':'.join(path_list)
 
     def add_readonly_path(self, path: str):
         """动态添加一个新的只读路径。如果沙箱因此从非激活状态变为激活状态，则会启用沙箱。"""
