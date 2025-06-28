@@ -68,14 +68,19 @@ def get_python_executable(command: str) -> str:
 @register_tool()
 def excute_command(command):
     """
-执行命令并返回输出结果 (标准输出会实时打印到控制台)
-禁止用于查看pdf，禁止使用 pdftotext 命令
+执行命令并返回输出结果 (标准输出会实时打印到控制台)。
+
+重要规则:
+- **克隆仓库**: 使用 `git clone` 时，必须指定一个新的子目录作为目标，以避免在非空工作目录中出错。
+  - **正确示例**: `git clone https://github.com/user/repo_name.git repo_name`
+  - **错误用法**: `git clone https://github.com/user/repo_name.git .`
+- **禁止**: 禁止用于查看pdf，禁止使用 `pdftotext` 命令。
 
 参数:
-    command: 要执行的命令，可以克隆仓库，安装依赖，运行代码等
+    command: 要执行的命令，例如克隆仓库、安装依赖、运行代码等。
 
 返回:
-    命令执行的最终状态和收集到的输出/错误信息
+    命令执行的最终状态和收集到的输出/错误信息。
     """
     try:
         command = unescape_html(command)
