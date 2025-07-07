@@ -383,7 +383,7 @@ if __name__ == "__main__":
     # result = asyncio.run(docQA("https://yym68686.top", "说一下HSTL pipeline"))
     # result = asyncio.run(docQA("https://wiki.yym68686.top", "PyTorch to MindSpore翻译思路是什么？"))
     # print(result['answer'])
-    # result = asyncio.run(pdfQA("https://api.telegram.org/file/bot5569497961:AAHobhUuydAwD8SPkXZiVFybvZJOmGrST_w/documents/file_1.pdf", "HSTL的pipeline详细讲一下"))
+    # result = asyncio.run(pdfQA("https://api.telegram.org/file/bot/documents/file_1.pdf", "HSTL的pipeline详细讲一下"))
     # print(result)
     # source_url = set([i.metadata['source'] for i in result["source_documents"]])
     # source_url = "\n".join(source_url)
