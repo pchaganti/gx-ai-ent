@@ -570,6 +570,9 @@ class chatgpt(BaseLLM):
                 elif tool_name == "read_image" and "<tool_error>" not in tool_response:
                     tool_info["base64_image"] = tool_response
                     all_responses.append(f"[{tool_name}({tool_args}) Result]:\n\nRead image successfully!")
+                elif tool_response.startswith("data:image/") and ";base64," in tool_response and "<tool_error>" not in tool_response:
+                    tool_info["base64_image"] = tool_response
+                    all_responses.append(f"[{tool_name}({tool_args}) Result]:\n\nRead image successfully!")
                 else:
                     all_responses.append(f"[{tool_name}({tool_args}) Result]:\n\n{tool_response}")
 
