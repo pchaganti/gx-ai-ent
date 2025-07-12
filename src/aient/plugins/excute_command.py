@@ -140,6 +140,8 @@ def excute_command(command):
                 stderr=subprocess.PIPE,
                 text=True,
                 bufsize=1,
+                encoding='utf-8',
+                errors='replace',
                 universal_newlines=True
             )
             # print(f"--- 开始执行命令 (PIPE): {command} ---")
