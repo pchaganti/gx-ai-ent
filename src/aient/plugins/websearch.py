@@ -83,7 +83,7 @@ def jina_ai_Web_crawler(url: str, isSearch=False) -> str:
         from bs4 import BeautifulSoup
         requests.packages.urllib3.disable_warnings()
         url = "https://r.jina.ai/" + url
-        response = requests.get(url, headers=headers, verify=False, timeout=5, stream=True)
+        response = requests.get(url, headers=headers, verify=False, timeout=20, stream=True)
         if response.status_code == 404:
             print("Page not found:", url)
             return "抱歉，网页不存在，目前无法访问该网页。@Trash@"
@@ -133,6 +133,7 @@ def get_url_content(url: str) -> str:
     # print(markdown_content)
     # print('-----------------------------')
     jina_content = jina_ai_Web_crawler(url)
+    # print(jina_content)
     # print('-----------------------------')
 
     # 定义评分函数
