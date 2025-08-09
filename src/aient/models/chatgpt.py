@@ -501,6 +501,10 @@ class chatgpt(BaseLLM):
                             missing_required_params.append(f"Error: {tool_name} missing required parameters: {missing_required_params}")
                 function_parameter = valid_function_parameters
 
+                # 删除 task_complete 跟其他工具一起调用的情况，因为 task_complete 必须单独调用
+                if len(function_parameter) > 1:
+                    function_parameter = [tool_dict for tool_dict in function_parameter if tool_dict.get("function_name", "") != "task_complete"]
+
                 if self.print_log and invalid_tools:
                     self.logger.error(f"invalid_tools: {invalid_tools}")
                     self.logger.error(f"function_parameter: {function_parameter}")
