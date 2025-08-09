@@ -4,6 +4,8 @@ import json
 import copy
 import httpx
 import asyncio
+import logging
+import inspect
 import requests
 from typing import Set
 from typing import Union, Optional, Callable, List, Dict, Any
@@ -11,6 +13,7 @@ from pathlib import Path
 
 
 from .base import BaseLLM
+from ..plugins.registry import registry
 from ..plugins import PLUGINS, get_tools_result_async, function_call_list, update_tools_config
 from ..utils.scripts import safe_get, async_generator_to_sync, parse_function_xml, parse_continuous_json, convert_functions_to_xml, remove_xml_tags_and_content
 from ..core.request import prepare_request_payload
@@ -63,6 +66,7 @@ class chatgpt(BaseLLM):
         function_call_max_loop: int = 3,
         cut_history_by_function_name: str = "",
         cache_messages: list = None,
+        logger: logging.Logger = None,
     ) -> None:
         """
         Initialize Chatbot with API key (from https://platform.openai.com/account/api-keys)
@@ -83,6 +87,14 @@ class chatgpt(BaseLLM):
         self.cut_history_by_function_name = cut_history_by_function_name
         self.latest_file_content = {}
 
+        if logger:
+            self.logger = logger
+        else:
+            # 如果没有提供 logger，创建一个默认的，它只会打印到控制台
+            self.logger = logging.getLogger("chatgpt_default")
+            if not self.logger.handlers: # 防止重复添加 handler
+                self.logger.addHandler(logging.StreamHandler())
+                self.logger.setLevel(logging.INFO if print_log else logging.WARNING)
 
         # 注册和处理传入的工具
         self._register_tools(tools)
@@ -122,7 +134,7 @@ class chatgpt(BaseLLM):
         """
         Add a message to the conversation
         """
-        # print("role", role, "function_name", function_name, "message", message)
+        # self.logger.info(f"role: {role}, function_name: {function_name}, message: {message}")
         if convo_id not in self.conversation:
             self.reset(convo_id=convo_id)
         if function_name == "" and message:
@@ -175,16 +187,13 @@ class chatgpt(BaseLLM):
                     self.conversation[convo_id].append({"role": "assistant", "content": "我已经执行过这个工具了，接下来我需要做什么？"})
 
         else:
-            print('\033[31m')
-            print("error: add_to_conversation message is None or empty")
-            print("role", role, "function_name", function_name, "message", message)
-            print('\033[0m')
+            self.logger.error(f"error: add_to_conversation message is None or empty, role: {role}, function_name: {function_name}, message: {message}")
 
         conversation_len = len(self.conversation[convo_id]) - 1
         message_index = 0
         # if self.print_log:
         #     replaced_text = json.loads(re.sub(r';base64,([A-Za-z0-9+/=]+)', ';base64,***', json.dumps(self.conversation[convo_id])))
-        #     print(json.dumps(replaced_text, indent=4, ensure_ascii=False))
+        #     self.logger.info(json.dumps(replaced_text, indent=4, ensure_ascii=False))
         while message_index < conversation_len:
             if self.conversation[convo_id][message_index]["role"] == self.conversation[convo_id][message_index + 1]["role"]:
                 if self.conversation[convo_id][message_index].get("content") and self.conversation[convo_id][message_index + 1].get("content") \
@@ -247,7 +256,7 @@ class chatgpt(BaseLLM):
                 mess = self.conversation[convo_id].pop(1)
                 string_mess = json.dumps(mess, ensure_ascii=False)
                 self.current_tokens[convo_id] -= len(string_mess) / 4
-                print("Truncate message:", mess)
+                self.logger.info(f"Truncate message: {mess}")
             else:
                 break
 
@@ -327,7 +336,7 @@ class chatgpt(BaseLLM):
                 request_data["tools"] = tools_request_body
                 request_data["tool_choice"] = "auto"
 
-        # print("request_data", json.dumps(request_data, indent=4, ensure_ascii=False))
+        # self.logger.info(f"request_data: {json.dumps(request_data, indent=4, ensure_ascii=False)}")
 
         # 调用核心模块的 prepare_request_payload 函数
         url, headers, json_post_body, engine_type = await prepare_request_payload(provider, request_data)
@@ -388,7 +397,7 @@ class chatgpt(BaseLLM):
                         else:
                             return str(line)
                 except:
-                    print("json.loads error:", repr(line))
+                    self.logger.error(f"json.loads error: {repr(line)}")
                     return None
 
             resp = json.loads(line) if isinstance(line, str) else line
@@ -446,10 +455,12 @@ class chatgpt(BaseLLM):
                 yield chunk
 
         if self.print_log:
-            print("\n\rtotal_tokens", total_tokens)
+            self.logger.info(f"total_tokens: {total_tokens}")
 
         if response_role is None:
             response_role = "assistant"
+
+        missing_required_params = []
 
         if self.use_plugins == True:
             full_response = full_response.replace("<tool_code>", "").replace("</tool_code>", "")
@@ -457,10 +468,43 @@ class chatgpt(BaseLLM):
             if function_parameter:
                 invalid_tools = [tool_dict for tool_dict in function_parameter if tool_dict.get("function_name", "") not in self.plugins.keys()]
                 function_parameter = [tool_dict for tool_dict in function_parameter if tool_dict.get("function_name", "") in self.plugins.keys()]
+
+                # Check for missing required parameters
+                valid_function_parameters = []
+                for tool_dict in function_parameter:
+                    tool_name = tool_dict.get("function_name")
+                    # tool_name must be in registry.tools, because it is in self.plugins which is from registry.tools
+                    func = registry.tools.get(tool_name)
+                    if not func:
+                        continue
+
+                    sig = inspect.signature(func)
+                    provided_params = tool_dict.get("parameter", {})
+                    # Ensure provided_params is a dictionary
+                    if not isinstance(provided_params, dict):
+                        self.logger.warning(f"Parameters for {tool_name} are not a dict: {provided_params}. Skipping.")
+                        continue
+
+                    missing_required_params = []
+                    for param in sig.parameters.values():
+                        # Check if the parameter has no default value and is not in the provided parameters
+                        if param.default is inspect.Parameter.empty and param.name not in provided_params:
+                            missing_required_params.append(param.name)
+
+                    if not missing_required_params:
+                        valid_function_parameters.append(tool_dict)
+                    else:
+                        if self.print_log:
+                            self.logger.warning(
+                                f"Skipping tool call for '{tool_name}' due to missing required parameters: {missing_required_params}"
+                            )
+                            missing_required_params.append(f"Error: {tool_name} missing required parameters: {missing_required_params}")
+                function_parameter = valid_function_parameters
+
                 if self.print_log and invalid_tools:
-                    print("invalid_tools", invalid_tools)
-                    print("function_parameter", function_parameter)
-                    print("full_response", full_response)
+                    self.logger.error(f"invalid_tools: {invalid_tools}")
+                    self.logger.error(f"function_parameter: {function_parameter}")
+                    self.logger.error(f"full_response: {full_response}")
                 if function_parameter:
                     need_function_call = True
                     if isinstance(self.conversation[convo_id][-1]["content"], str) and \
@@ -470,14 +514,14 @@ class chatgpt(BaseLLM):
                 else:
                     need_function_call = False
                     if self.print_log:
-                        print("Failed to parse function_parameter full_response", full_response)
+                        self.logger.error(f"Failed to parse function_parameter full_response: {full_response}")
                     full_response = ""
 
         # 处理函数调用
         if need_function_call and self.use_plugins == True:
             if self.print_log:
-                print("function_parameter", function_parameter)
-                print("function_full_response", function_full_response)
+                self.logger.info(f"function_parameter: {function_parameter}")
+                self.logger.info(f"function_full_response: {function_full_response}")
 
             function_response = ""
             # 定义处理单个工具调用的辅助函数
@@ -496,7 +540,7 @@ class chatgpt(BaseLLM):
                     if function_call_max_tokens <= 0:
                         function_call_max_tokens = int(self.truncate_limit / 2)
                     if self.print_log:
-                        print(f"\033[32m function_call {tool_name}, max token: {function_call_max_tokens} \033[0m")
+                        self.logger.info(f"function_call {tool_name}, max token: {function_call_max_tokens}")
 
                     # 处理函数调用结果
                     if is_async:
@@ -529,7 +573,7 @@ class chatgpt(BaseLLM):
                 if function_full_response:
                     function_parameter = parse_continuous_json(function_full_response, function_call_name)
             except Exception as e:
-                print(f"解析JSON失败: {e}")
+                self.logger.error(f"解析JSON失败: {e}")
                 # 保持原始工具调用
                 tool_calls = [{
                     'function_name': function_call_name,
@@ -579,6 +623,8 @@ class chatgpt(BaseLLM):
 
             # 合并所有工具响应
             function_response = "\n\n".join(all_responses).strip()
+            if missing_required_params:
+                function_response += "\n\n" + "\n\n".join(missing_required_params)
 
             # 使用第一个工具的名称和参数作为历史记录
             function_call_name = tool_calls[0]['function_name']
@@ -668,27 +714,56 @@ class chatgpt(BaseLLM):
 
         # 打印日志
         if self.print_log:
-            print("api_url", kwargs.get('api_url', self.api_url.chat_url), url)
-            print("api_key", kwargs.get('api_key', self.api_key))
+            self.logger.info(f"api_url: {kwargs.get('api_url', self.api_url.chat_url)}, {url}")
+            self.logger.info(f"api_key: {kwargs.get('api_key', self.api_key)}")
 
         # 发送请求并处理响应
         for _ in range(3):
             if self.print_log:
                 replaced_text = json.loads(re.sub(r';base64,([A-Za-z0-9+/=]+)', ';base64,***', json.dumps(json_post)))
-                print(json.dumps(replaced_text, indent=4, ensure_ascii=False))
+                replaced_text_str = json.dumps(replaced_text, indent=4, ensure_ascii=False)
+                self.logger.info(f"Request Body:\n{replaced_text_str}")
 
             try:
                 # 改进处理方式，创建一个内部异步函数来处理异步调用
                 async def process_async():
                     # 异步调用 fetch_response_stream
-                    async_generator = fetch_response_stream(
-                        self.aclient,
-                        url,
-                        headers,
-                        json_post,
-                        engine_type,
-                        model or self.engine,
-                    )
+                    # self.logger.info("--------------------------------")
+                    # self.logger.info(prompt)
+                    # self.logger.info(parse_function_xml(prompt))
+                    # self.logger.info(convert_functions_to_xml(parse_function_xml(prompt)))
+                    # self.logger.info(convert_functions_to_xml(parse_function_xml(prompt)).strip() == prompt)
+                    # self.logger.info("--------------------------------")
+                    if prompt and "</" in prompt and "<instructions>" not in prompt and convert_functions_to_xml(parse_function_xml(prompt)).strip() == prompt:
+                        tmp_response = {
+                            "id": "chatcmpl-zXCi5TxWy953TCcxFocSienhvx0BB",
+                            "object": "chat.completion.chunk",
+                            "created": 1754588695,
+                            "model": "gemini-2.5-flash",
+                            "choices": [
+                                {
+                                "index": 0,
+                                "delta": {
+                                    "role": "assistant",
+                                    "content": prompt
+                                },
+                                "finish_reason": "stop"
+                                }
+                            ],
+                            "system_fingerprint": "fp_d576307f90"
+                        }
+                        async def _mock_response_generator():
+                            yield f"data: {json.dumps(tmp_response)}\n\n"
+                        async_generator = _mock_response_generator()
+                    else:
+                        async_generator = fetch_response_stream(
+                            self.aclient,
+                            url,
+                            headers,
+                            json_post,
+                            engine_type,
+                            model or self.engine,
+                        )
                     # 异步处理响应流
                     async for chunk in self._process_stream_response(
                         async_generator,
@@ -709,15 +784,15 @@ class chatgpt(BaseLLM):
                 # 将异步函数转换为同步生成器
                 return async_generator_to_sync(process_async())
             except ConnectionError:
-                print("连接错误，请检查服务器状态或网络连接。")
+                self.logger.error("连接错误，请检查服务器状态或网络连接。")
                 return
             except requests.exceptions.ReadTimeout:
-                print("请求超时，请检查网络连接或增加超时时间。")
+                self.logger.error("请求超时，请检查网络连接或增加超时时间。")
                 return
             except httpx.RemoteProtocolError:
                 continue
             except Exception as e:
-                print(f"发生了未预料的错误：{e}")
+                self.logger.error(f"发生了未预料的错误：{e}")
                 if "Invalid URL" in str(e):
                     e = "您输入了无效的API URL，请使用正确的URL并使用`/start`命令重新设置API URL。具体错误如下：\n\n" + str(e)
                     raise Exception(f"{e}")
@@ -755,28 +830,54 @@ class chatgpt(BaseLLM):
 
         # 打印日志
         if self.print_log:
-            # print("api_url", kwargs.get('api_url', self.api_url.chat_url) == url)
-            # print("api_url", kwargs.get('api_url', self.api_url.chat_url))
-            print("api_url", url)
-            # print("headers", headers)
-            print("api_key", kwargs.get('api_key', self.api_key))
+            self.logger.info(f"api_url: {url}")
+            self.logger.info(f"api_key: {kwargs.get('api_key', self.api_key)}")
 
         # 发送请求并处理响应
         for _ in range(3):
             if self.print_log:
                 replaced_text = json.loads(re.sub(r';base64,([A-Za-z0-9+/=]+)', ';base64,***', json.dumps(json_post)))
-                print(json.dumps(replaced_text, indent=4, ensure_ascii=False))
+                replaced_text_str = json.dumps(replaced_text, indent=4, ensure_ascii=False)
+                self.logger.info(f"Request Body:\n{replaced_text_str}")
 
             try:
                 # 使用fetch_response_stream处理响应
-                generator = fetch_response_stream(
-                    self.aclient,
-                    url,
-                    headers,
-                    json_post,
-                    engine_type,
-                    model or self.engine,
-                )
+                # self.logger.info("--------------------------------")
+                # self.logger.info(prompt)
+                # self.logger.info(parse_function_xml(prompt))
+                # self.logger.info(convert_functions_to_xml(parse_function_xml(prompt)))
+                # self.logger.info(convert_functions_to_xml(parse_function_xml(prompt)).strip() == prompt)
+                # self.logger.info("--------------------------------")
+                if prompt and "</" in prompt and "<instructions>" not in prompt and convert_functions_to_xml(parse_function_xml(prompt)).strip() == prompt:
+                    tmp_response = {
+                        "id": "chatcmpl-zXCi5TxWy953TCcxFocSienhvx0BB",
+                        "object": "chat.completion.chunk",
+                        "created": 1754588695,
+                        "model": "gemini-2.5-flash",
+                        "choices": [
+                            {
+                            "index": 0,
+                            "delta": {
+                                "role": "assistant",
+                                "content": prompt
+                            },
+                            "finish_reason": "stop"
+                            }
+                        ],
+                        "system_fingerprint": "fp_d576307f90"
+                    }
+                    async def _mock_response_generator():
+                        yield f"data: {json.dumps(tmp_response)}\n\n"
+                    generator = _mock_response_generator()
+                else:
+                    generator = fetch_response_stream(
+                        self.aclient,
+                        url,
+                        headers,
+                        json_post,
+                        engine_type,
+                        model or self.engine,
+                    )
                 # if isinstance(chunk, dict) and "error" in chunk:
                 #     # 处理错误响应
                 #     if chunk["status_code"] in (400, 422, 503):
@@ -810,9 +911,9 @@ class chatgpt(BaseLLM):
             except httpx.RemoteProtocolError:
                 continue
             except Exception as e:
-                print(f"发生了未预料的错误：{e}")
+                self.logger.error(f"发生了未预料的错误：{e}")
                 import traceback
-                traceback.print_exc()
+                self.logger.error(traceback.format_exc())
                 if "Invalid URL" in str(e):
                     e = "您输入了无效的API URL，请使用正确的URL并使用`/start`命令重新设置API URL。具体错误如下：\n\n" + str(e)
                     raise Exception(f"{e}")
@@ -979,7 +1080,7 @@ class chatgpt(BaseLLM):
                 return json_post, True, None
 
         except Exception as e:
-            print(f"处理响应错误时出现异常: {e}")
+            self.logger.error(f"处理响应错误时出现异常: {e}")
             return json_post, False, str(e)
 
     def _handle_response_error_sync(self, response, json_post):
