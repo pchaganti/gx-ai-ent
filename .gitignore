@@ -1,6 +1,1 @@
-__pycache__/
-.DS_Store
-.vscode
-.env
-build
-*.egg-info/
+main.py
