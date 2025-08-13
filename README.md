@@ -2,7 +2,7 @@
 
 [English](./README.md) | [Chinese](./README_CN.md)
 
-aient is a powerful library designed to simplify and unify the use of different large language models, including GPT-3.5/4/4 Turbo/4o, o1-preview/o1-mini, DALL-E 3, Claude2/3/3.5, Gemini1.5 Pro/Flash, Vertex AI (Claude, Gemini), DuckDuckGo, and Groq. The library supports GPT format function calls and has built-in Google search and URL summarization features, greatly enhancing the practicality and flexibility of the models.
+aient is a powerful library designed to simplify and unify the use of different large language models, including gpt-4.1/5, o3, DALL-E 3, claude4, gemini-2.5-pro/flash, Vertex AI (Claude, Gemini), and Groq. The library supports GPT format function calls and has built-in Google search and URL summarization features, greatly enhancing the practicality and flexibility of the models.
 
 ## ✨ Features
 
@@ -59,14 +59,13 @@ The following is a list of environment variables related to plugin settings:
 
 ## Supported models
 
-- GPT-3.5/4/4 Turbo/4o
-- o1-preview/o1-mini
+- gpt-4.1/5
+- o3
 - DALL-E 3
-- Claude2/3/3.5
-- Gemini1.5 Pro/Flash
+- claude4
+- gemini-2.5-pro/flash
 - Vertex AI (Claude, Gemini)
 - Groq
-- DuckDuckGo(gpt-4o-mini, claude-3-haiku, Meta-Llama-3.1-70B, Mixtral-8x7B)
 
 ## 🧩 Plugin
 

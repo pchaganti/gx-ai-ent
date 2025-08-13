@@ -2,7 +2,7 @@
 
 [英文](./README.md) | [中文](./README_CN.md)
 
-aient 是一个强大的库，旨在简化和统一不同大型语言模型的使用，包括 GPT-3.5/4/4 Turbo/4o、o1-preview/o1-mini、DALL-E 3、Claude2/3/3.5、Gemini1.5 Pro/Flash、Vertex AI(Claude, Gemini) 、DuckDuckGo 和 Groq。该库支持 GPT 格式的函数调用，并内置了 Google 搜索和 URL 总结功能，极大地增强了模型的实用性和灵活性。
+aient 是一个强大的库，旨在简化和统一不同大型语言模型的使用，包括 gpt-4.1/5、o3、DALL-E 3、claude4、gemini-2.5-pro/flash、Vertex AI(Claude, Gemini) 和 Groq。该库支持 GPT 格式的函数调用，并内置了 Google 搜索和 URL 总结功能，极大地增强了模型的实用性和灵活性。
 
 ## ✨ 特性
 
@@ -59,14 +59,13 @@ bot = chatgpt(api_key="{YOUR_API_KEY}", engine="gpt-4o", use_plugins=False)
 
 ## 支持的模型
 
-- GPT-3.5/4/4 Turbo/4o
-- o1-preview/o1-mini
+- gpt-4.1/5
+- o3
 - DALL-E 3
-- Claude2/3/3.5
-- Gemini1.5 Pro/Flash
-- Vertex AI(Claude, Gemini)
+- claude4
+- gemini-2.5-pro/flash
+- Vertex AI(claude, gemini)
 - Groq
-- DuckDuckGo(gpt-4o-mini, claude-3-haiku, Meta-Llama-3.1-70B, Mixtral-8x7B)
 
 ## 🧩 插件
 
