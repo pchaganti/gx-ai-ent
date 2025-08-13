@@ -711,11 +711,14 @@ class chatgpt(BaseLLM):
         # 替换原来的获取请求体的代码
         # json_post = next(async_generator_to_sync(get_post_body_async()))
         try:
-            url, headers, json_post, engine_type = asyncio.run(get_post_body_async())
-        except RuntimeError:
-            # 如果已经在事件循环中，则使用不同的方法
             loop = asyncio.get_event_loop()
-            url, headers, json_post, engine_type = loop.run_until_complete(get_post_body_async())
+            if loop.is_closed():
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        url, headers, json_post, engine_type = loop.run_until_complete(get_post_body_async())
 
         self.truncate_conversation(convo_id=convo_id)
 

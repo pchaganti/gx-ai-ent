@@ -212,6 +212,8 @@ def async_generator_to_sync(async_gen):
             # 清理所有待处理的任务
             tasks = [t for t in asyncio.all_tasks(loop) if not t.done()]
             if tasks:
+                for task in tasks:
+                    task.cancel()
                 loop.run_until_complete(asyncio.gather(*tasks, return_exceptions=True))
             loop.run_until_complete(loop.shutdown_asyncgens())
             loop.close()

@@ -53,20 +53,10 @@ class BaseLLM:
                 "https": proxy,
             },
         )
-        if proxy := (
-            proxy or os.environ.get("all_proxy") or os.environ.get("ALL_PROXY") or None
-        ):
-            if "socks5h" not in proxy:
-                self.aclient = httpx.AsyncClient(
-                    follow_redirects=True,
-                    proxies=proxy,
-                    timeout=timeout,
-                )
-        else:
-            self.aclient = httpx.AsyncClient(
-                follow_redirects=True,
-                timeout=timeout,
-            )
+        self._aclient = None
+        self._proxy = proxy
+        self._timeout = timeout
+        self._loop = None
 
         self.conversation: dict[str, list[dict]] = {
             "default": [
@@ -82,6 +72,33 @@ class BaseLLM:
         self.function_call_max_loop = 10
         self.use_plugins = use_plugins
         self.print_log: bool = print_log
+
+    def _get_aclient(self):
+        """
+        Lazily initialize and return the httpx.AsyncClient.
+        This method ensures the client is always bound to a running event loop.
+        """
+        import asyncio
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+        if self._aclient is None or self._aclient.is_closed or self._loop is not loop:
+            self._loop = loop
+            proxy = self._proxy or os.environ.get("all_proxy") or os.environ.get("ALL_PROXY") or None
+            proxies = proxy if proxy and "socks5h" not in proxy else None
+            self._aclient = httpx.AsyncClient(
+                follow_redirects=True,
+                proxy=proxies,
+                timeout=self._timeout,
+            )
+        return self._aclient
+
+    @property
+    def aclient(self):
+        return self._get_aclient()
 
     def add_to_conversation(
         self,
@@ -196,7 +213,6 @@ class BaseLLM:
             **kwargs,
         ):
             response += chunk
-        # full_response: str = "".join([r async for r in response])
         full_response: str = "".join(response)
         return full_response
 
