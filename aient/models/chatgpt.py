@@ -17,7 +17,7 @@ from ..plugins.registry import registry
 from ..plugins import PLUGINS, get_tools_result_async, function_call_list, update_tools_config
 from ..utils.scripts import safe_get, async_generator_to_sync, parse_function_xml, parse_continuous_json, convert_functions_to_xml, remove_xml_tags_and_content
 from ..core.request import prepare_request_payload
-from ..core.response import fetch_response_stream
+from ..core.response import fetch_response_stream, fetch_response
 
 def get_filtered_keys_from_object(obj: object, *keys: str) -> Set[str]:
     """
@@ -288,6 +288,7 @@ class chatgpt(BaseLLM):
         convo_id: str = "default",
         model: str = "",
         pass_history: int = 9999,
+        stream: bool = True,
         **kwargs,
     ):
         self.conversation[convo_id][0] = {"role": "system","content": self.system_prompt + "\n\n" + self.get_latest_file_content()}
@@ -309,12 +310,13 @@ class chatgpt(BaseLLM):
                 {"role": "system","content": self.system_prompt + "\n\n" + self.get_latest_file_content()},
                 {"role": role, "content": prompt}
             ],
-            "stream": True,
-            "stream_options": {
-                "include_usage": True
-            },
+            "stream": stream,
             "temperature": kwargs.get("temperature", self.temperature)
         }
+        if stream:
+            request_data["stream_options"] = {
+                "include_usage": True
+            }
 
         if kwargs.get("max_tokens", self.max_tokens):
             request_data["max_tokens"] = kwargs.get("max_tokens", self.max_tokens)
@@ -687,6 +689,7 @@ class chatgpt(BaseLLM):
         function_call_id: str = "",
         language: str = "English",
         system_prompt: str = None,
+        stream: bool = True,
         **kwargs,
     ):
         """
@@ -702,7 +705,7 @@ class chatgpt(BaseLLM):
         json_post = None
         async def get_post_body_async():
             nonlocal json_post
-            url, headers, json_post, engine_type = await self.get_post_body(prompt, role, convo_id, model, pass_history, **kwargs)
+            url, headers, json_post, engine_type = await self.get_post_body(prompt, role, convo_id, model, pass_history, stream=stream, **kwargs)
             return url, headers, json_post, engine_type
 
         # 替换原来的获取请求体的代码
@@ -760,14 +763,24 @@ class chatgpt(BaseLLM):
                             yield f"data: {json.dumps(tmp_response)}\n\n"
                         async_generator = _mock_response_generator()
                     else:
-                        async_generator = fetch_response_stream(
-                            self.aclient,
-                            url,
-                            headers,
-                            json_post,
-                            engine_type,
-                            model or self.engine,
-                        )
+                        if stream:
+                            async_generator = fetch_response_stream(
+                                self.aclient,
+                                url,
+                                headers,
+                                json_post,
+                                engine_type,
+                                model or self.engine,
+                            )
+                        else:
+                            async_generator = fetch_response(
+                                self.aclient,
+                                url,
+                                headers,
+                                json_post,
+                                engine_type,
+                                model or self.engine,
+                            )
                     # 异步处理响应流
                     async for chunk in self._process_stream_response(
                         async_generator,
@@ -817,6 +830,7 @@ class chatgpt(BaseLLM):
         function_call_id: str = "",
         language: str = "English",
         system_prompt: str = None,
+        stream: bool = True,
         **kwargs,
     ):
         """
@@ -829,7 +843,7 @@ class chatgpt(BaseLLM):
         self.add_to_conversation(prompt, role, convo_id=convo_id, function_name=function_name, total_tokens=total_tokens, function_arguments=function_arguments, pass_history=pass_history, function_call_id=function_call_id)
 
         # 获取请求体
-        url, headers, json_post, engine_type = await self.get_post_body(prompt, role, convo_id, model, pass_history, **kwargs)
+        url, headers, json_post, engine_type = await self.get_post_body(prompt, role, convo_id, model, pass_history, stream=stream, **kwargs)
         self.truncate_conversation(convo_id=convo_id)
 
         # 打印日志
@@ -874,24 +888,24 @@ class chatgpt(BaseLLM):
                         yield f"data: {json.dumps(tmp_response)}\n\n"
                     generator = _mock_response_generator()
                 else:
-                    generator = fetch_response_stream(
-                        self.aclient,
-                        url,
-                        headers,
-                        json_post,
-                        engine_type,
-                        model or self.engine,
-                    )
-                # if isinstance(chunk, dict) and "error" in chunk:
-                #     # 处理错误响应
-                #     if chunk["status_code"] in (400, 422, 503):
-                #         json_post, should_retry = await self._handle_response_error(
-                #             type('Response', (), {'status_code': chunk["status_code"], 'text': json.dumps(chunk["details"]), 'aread': lambda: asyncio.sleep(0)}),
-                #             json_post
-                #         )
-                #         if should_retry:
-                #             break  # 跳出内部循环，继续外部循环重试
-                #     raise Exception(f"{chunk['status_code']} {chunk['error']} {chunk['details']}")
+                    if stream:
+                        generator = fetch_response_stream(
+                            self.aclient,
+                            url,
+                            headers,
+                            json_post,
+                            engine_type,
+                            model or self.engine,
+                        )
+                    else:
+                        generator = fetch_response(
+                            self.aclient,
+                            url,
+                            headers,
+                            json_post,
+                            engine_type,
+                            model or self.engine,
+                        )
 
                 # 处理正常响应
                 async for processed_chunk in self._process_stream_response(
@@ -943,9 +957,34 @@ class chatgpt(BaseLLM):
             convo_id=convo_id,
             pass_history=pass_history,
             model=model or self.engine,
+            stream=False,
             **kwargs,
         )
         full_response: str = "".join([r async for r in response])
+        return full_response
+
+    def ask(
+        self,
+        prompt: str,
+        role: str = "user",
+        convo_id: str = "default",
+        model: str = "",
+        pass_history: int = 9999,
+        **kwargs,
+    ) -> str:
+        """
+        Non-streaming ask
+        """
+        response = self.ask_stream(
+            prompt=prompt,
+            role=role,
+            convo_id=convo_id,
+            pass_history=pass_history,
+            model=model or self.engine,
+            stream=False,
+            **kwargs,
+        )
+        full_response: str = "".join([r for r in response])
         return full_response
 
     def rollback(self, n: int = 1, convo_id: str = "default") -> None:
