@@ -676,6 +676,103 @@ class chatgpt(BaseLLM):
                 self.conversation[convo_id].pop(-1)
                 self.conversation[convo_id].pop(-1)
 
+    async def _ask_stream_handler(
+        self,
+        prompt: list,
+        role: str = "user",
+        convo_id: str = "default",
+        model: str = "",
+        pass_history: int = 9999,
+        function_name: str = "",
+        total_tokens: int = 0,
+        function_arguments: str = "",
+        function_call_id: str = "",
+        language: str = "English",
+        system_prompt: str = None,
+        stream: bool = True,
+        **kwargs,
+    ):
+        """
+        Unified stream handler (async)
+        """
+        # 准备会话
+        self.system_prompt = system_prompt or self.system_prompt
+        if convo_id not in self.conversation or pass_history <= 2:
+            self.reset(convo_id=convo_id, system_prompt=system_prompt)
+        self.add_to_conversation(prompt, role, convo_id=convo_id, function_name=function_name, total_tokens=total_tokens, function_arguments=function_arguments, pass_history=pass_history, function_call_id=function_call_id)
+
+        # 获取请求体
+        url, headers, json_post, engine_type = await self.get_post_body(prompt, role, convo_id, model, pass_history, stream=stream, **kwargs)
+        self.truncate_conversation(convo_id=convo_id)
+
+        # 打印日志
+        if self.print_log:
+            self.logger.info(f"api_url: {kwargs.get('api_url', self.api_url.chat_url)}, {url}")
+            self.logger.info(f"api_key: {kwargs.get('api_key', self.api_key)}")
+
+        # 发送请求并处理响应
+        for i in range(3):
+            if self.print_log:
+                replaced_text = json.loads(re.sub(r';base64,([A-Za-z0-9+/=]+)', ';base64,***', json.dumps(json_post)))
+                replaced_text_str = json.dumps(replaced_text, indent=4, ensure_ascii=False)
+                self.logger.info(f"Request Body:\n{replaced_text_str}")
+
+            try:
+                if prompt and "</" in prompt and "<instructions>" not in prompt and convert_functions_to_xml(parse_function_xml(prompt)).strip() == prompt:
+                    tmp_response = {
+                        "id": "chatcmpl-zXCi5TxWy953TCcxFocSienhvx0BB",
+                        "object": "chat.completion.chunk",
+                        "created": 1754588695,
+                        "model": model or self.engine,
+                        "choices": [
+                            {
+                                "index": 0,
+                                "delta": {"role": "assistant", "content": prompt},
+                                "finish_reason": "stop",
+                            }
+                        ],
+                        "system_fingerprint": "fp_d576307f90",
+                    }
+                    async def _mock_response_generator():
+                        yield f"data: {json.dumps(tmp_response)}\n\n"
+                    generator = _mock_response_generator()
+                else:
+                    if stream:
+                        generator = fetch_response_stream(
+                            self.aclient, url, headers, json_post, engine_type, model or self.engine,
+                        )
+                    else:
+                        generator = fetch_response(
+                            self.aclient, url, headers, json_post, engine_type, model or self.engine,
+                        )
+
+                # 处理正常响应
+                async for processed_chunk in self._process_stream_response(
+                    generator, convo_id=convo_id, function_name=function_name,
+                    total_tokens=total_tokens, function_arguments=function_arguments,
+                    function_call_id=function_call_id, model=model, language=language,
+                    system_prompt=system_prompt, pass_history=pass_history, is_async=True, **kwargs
+                ):
+                    yield processed_chunk
+
+                # 成功处理，跳出重试循环
+                break
+            except (httpx.ConnectError, httpx.ReadTimeout):
+                self.logger.error("连接或读取超时错误，请检查服务器状态或网络连接。")
+                return # Stop iteration
+            except httpx.RemoteProtocolError:
+                continue
+            except Exception as e:
+                self.logger.error(f"发生了未预料的错误：{e}")
+                import traceback
+                self.logger.error(traceback.format_exc())
+                if "Invalid URL" in str(e):
+                    e = "您输入了无效的API URL，请使用正确的URL并使用`/start`命令重新设置API URL。具体错误如下：\n\n" + str(e)
+                    raise Exception(f"{e}")
+                # 最后一次重试失败，向上抛出异常
+                if i == 2:
+                    raise Exception(f"{e}")
+
     def ask_stream(
         self,
         prompt: list,
@@ -695,21 +792,6 @@ class chatgpt(BaseLLM):
         """
         Ask a question (同步流式响应)
         """
-        # 准备会话
-        self.system_prompt = system_prompt or self.system_prompt
-        if convo_id not in self.conversation or pass_history <= 2:
-            self.reset(convo_id=convo_id, system_prompt=system_prompt)
-        self.add_to_conversation(prompt, role, convo_id=convo_id, function_name=function_name, total_tokens=total_tokens, function_arguments=function_arguments, function_call_id=function_call_id, pass_history=pass_history)
-
-        # 获取请求体
-        json_post = None
-        async def get_post_body_async():
-            nonlocal json_post
-            url, headers, json_post, engine_type = await self.get_post_body(prompt, role, convo_id, model, pass_history, stream=stream, **kwargs)
-            return url, headers, json_post, engine_type
-
-        # 替换原来的获取请求体的代码
-        # json_post = next(async_generator_to_sync(get_post_body_async()))
         try:
             loop = asyncio.get_event_loop()
             if loop.is_closed():
@@ -718,107 +800,13 @@ class chatgpt(BaseLLM):
         except RuntimeError:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-        url, headers, json_post, engine_type = loop.run_until_complete(get_post_body_async())
 
-        self.truncate_conversation(convo_id=convo_id)
-
-        # 打印日志
-        if self.print_log:
-            self.logger.info(f"api_url: {kwargs.get('api_url', self.api_url.chat_url)}, {url}")
-            self.logger.info(f"api_key: {kwargs.get('api_key', self.api_key)}")
-
-        # 发送请求并处理响应
-        for _ in range(3):
-            if self.print_log:
-                replaced_text = json.loads(re.sub(r';base64,([A-Za-z0-9+/=]+)', ';base64,***', json.dumps(json_post)))
-                replaced_text_str = json.dumps(replaced_text, indent=4, ensure_ascii=False)
-                self.logger.info(f"Request Body:\n{replaced_text_str}")
-
-            try:
-                # 改进处理方式，创建一个内部异步函数来处理异步调用
-                async def process_async():
-                    # 异步调用 fetch_response_stream
-                    # self.logger.info("--------------------------------")
-                    # self.logger.info(prompt)
-                    # self.logger.info(parse_function_xml(prompt))
-                    # self.logger.info(convert_functions_to_xml(parse_function_xml(prompt)))
-                    # self.logger.info(convert_functions_to_xml(parse_function_xml(prompt)).strip() == prompt)
-                    # self.logger.info("--------------------------------")
-                    if prompt and "</" in prompt and "<instructions>" not in prompt and convert_functions_to_xml(parse_function_xml(prompt)).strip() == prompt:
-                        tmp_response = {
-                            "id": "chatcmpl-zXCi5TxWy953TCcxFocSienhvx0BB",
-                            "object": "chat.completion.chunk",
-                            "created": 1754588695,
-                            "model": "gemini-2.5-flash",
-                            "choices": [
-                                {
-                                "index": 0,
-                                "delta": {
-                                    "role": "assistant",
-                                    "content": prompt
-                                },
-                                "finish_reason": "stop"
-                                }
-                            ],
-                            "system_fingerprint": "fp_d576307f90"
-                        }
-                        async def _mock_response_generator():
-                            yield f"data: {json.dumps(tmp_response)}\n\n"
-                        async_generator = _mock_response_generator()
-                    else:
-                        if stream:
-                            async_generator = fetch_response_stream(
-                                self.aclient,
-                                url,
-                                headers,
-                                json_post,
-                                engine_type,
-                                model or self.engine,
-                            )
-                        else:
-                            async_generator = fetch_response(
-                                self.aclient,
-                                url,
-                                headers,
-                                json_post,
-                                engine_type,
-                                model or self.engine,
-                            )
-                    # 异步处理响应流
-                    async for chunk in self._process_stream_response(
-                        async_generator,
-                        convo_id=convo_id,
-                        function_name=function_name,
-                        total_tokens=total_tokens,
-                        function_arguments=function_arguments,
-                        function_call_id=function_call_id,
-                        model=model,
-                        language=language,
-                        system_prompt=system_prompt,
-                        pass_history=pass_history,
-                        is_async=True,
-                        **kwargs
-                    ):
-                        yield chunk
-
-                # 将异步函数转换为同步生成器
-                return async_generator_to_sync(process_async())
-            except ConnectionError:
-                self.logger.error("连接错误，请检查服务器状态或网络连接。")
-                return
-            except requests.exceptions.ReadTimeout:
-                self.logger.error("请求超时，请检查网络连接或增加超时时间。")
-                return
-            except httpx.RemoteProtocolError:
-                continue
-            except Exception as e:
-                self.logger.error(f"发生了未预料的错误：{e}")
-                if "Invalid URL" in str(e):
-                    e = "您输入了无效的API URL，请使用正确的URL并使用`/start`命令重新设置API URL。具体错误如下：\n\n" + str(e)
-                    raise Exception(f"{e}")
-                # 最后一次重试失败，向上抛出异常
-                if _ == 2:
-                    raise Exception(f"{e}")
+        async_gen = self._ask_stream_handler(
+            prompt, role, convo_id, model, pass_history, function_name, total_tokens,
+            function_arguments, function_call_id, language, system_prompt, stream, **kwargs
+        )
+        for chunk in async_generator_to_sync(async_gen):
+            yield chunk
 
     async def ask_stream_async(
         self,
@@ -839,108 +827,11 @@ class chatgpt(BaseLLM):
         """
         Ask a question (异步流式响应)
         """
-        # 准备会话
-        self.system_prompt = system_prompt or self.system_prompt
-        if convo_id not in self.conversation or pass_history <= 2:
-            self.reset(convo_id=convo_id, system_prompt=system_prompt)
-        self.add_to_conversation(prompt, role, convo_id=convo_id, function_name=function_name, total_tokens=total_tokens, function_arguments=function_arguments, pass_history=pass_history, function_call_id=function_call_id)
-
-        # 获取请求体
-        url, headers, json_post, engine_type = await self.get_post_body(prompt, role, convo_id, model, pass_history, stream=stream, **kwargs)
-        self.truncate_conversation(convo_id=convo_id)
-
-        # 打印日志
-        if self.print_log:
-            self.logger.info(f"api_url: {url}")
-            self.logger.info(f"api_key: {kwargs.get('api_key', self.api_key)}")
-
-        # 发送请求并处理响应
-        for _ in range(3):
-            if self.print_log:
-                replaced_text = json.loads(re.sub(r';base64,([A-Za-z0-9+/=]+)', ';base64,***', json.dumps(json_post)))
-                replaced_text_str = json.dumps(replaced_text, indent=4, ensure_ascii=False)
-                self.logger.info(f"Request Body:\n{replaced_text_str}")
-
-            try:
-                # 使用fetch_response_stream处理响应
-                # self.logger.info("--------------------------------")
-                # self.logger.info(prompt)
-                # self.logger.info(parse_function_xml(prompt))
-                # self.logger.info(convert_functions_to_xml(parse_function_xml(prompt)))
-                # self.logger.info(convert_functions_to_xml(parse_function_xml(prompt)).strip() == prompt)
-                # self.logger.info("--------------------------------")
-                if prompt and "</" in prompt and "<instructions>" not in prompt and convert_functions_to_xml(parse_function_xml(prompt)).strip() == prompt:
-                    tmp_response = {
-                        "id": "chatcmpl-zXCi5TxWy953TCcxFocSienhvx0BB",
-                        "object": "chat.completion.chunk",
-                        "created": 1754588695,
-                        "model": "gemini-2.5-flash",
-                        "choices": [
-                            {
-                            "index": 0,
-                            "delta": {
-                                "role": "assistant",
-                                "content": prompt
-                            },
-                            "finish_reason": "stop"
-                            }
-                        ],
-                        "system_fingerprint": "fp_d576307f90"
-                    }
-                    async def _mock_response_generator():
-                        yield f"data: {json.dumps(tmp_response)}\n\n"
-                    generator = _mock_response_generator()
-                else:
-                    if stream:
-                        generator = fetch_response_stream(
-                            self.aclient,
-                            url,
-                            headers,
-                            json_post,
-                            engine_type,
-                            model or self.engine,
-                        )
-                    else:
-                        generator = fetch_response(
-                            self.aclient,
-                            url,
-                            headers,
-                            json_post,
-                            engine_type,
-                            model or self.engine,
-                        )
-
-                # 处理正常响应
-                async for processed_chunk in self._process_stream_response(
-                    generator,
-                    convo_id=convo_id,
-                    function_name=function_name,
-                    total_tokens=total_tokens,
-                    function_arguments=function_arguments,
-                    function_call_id=function_call_id,
-                    model=model,
-                    language=language,
-                    system_prompt=system_prompt,
-                    pass_history=pass_history,
-                    is_async=True,
-                    **kwargs
-                ):
-                    yield processed_chunk
-
-                # 成功处理，跳出重试循环
-                break
-            except httpx.RemoteProtocolError:
-                continue
-            except Exception as e:
-                self.logger.error(f"发生了未预料的错误：{e}")
-                import traceback
-                self.logger.error(traceback.format_exc())
-                if "Invalid URL" in str(e):
-                    e = "您输入了无效的API URL，请使用正确的URL并使用`/start`命令重新设置API URL。具体错误如下：\n\n" + str(e)
-                    raise Exception(f"{e}")
-                # 最后一次重试失败，向上抛出异常
-                if _ == 2:
-                    raise Exception(f"{e}")
+        async for chunk in self._ask_stream_handler(
+            prompt, role, convo_id, model, pass_history, function_name, total_tokens,
+            function_arguments, function_call_id, language, system_prompt, stream, **kwargs
+        ):
+            yield chunk
 
     async def ask_async(
         self,
