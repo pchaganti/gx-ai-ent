@@ -67,6 +67,7 @@ class chatgpt(BaseLLM):
         cut_history_by_function_name: str = "",
         cache_messages: list = None,
         logger: logging.Logger = None,
+        check_done: bool = False,
     ) -> None:
         """
         Initialize Chatbot with API key (from https://platform.openai.com/account/api-keys)
@@ -86,6 +87,7 @@ class chatgpt(BaseLLM):
         self.function_call_max_loop = function_call_max_loop
         self.cut_history_by_function_name = cut_history_by_function_name
         self.latest_file_content = {}
+        self.check_done = check_done
 
         if logger:
             self.logger = logger
@@ -465,6 +467,12 @@ class chatgpt(BaseLLM):
         missing_required_params = []
 
         if self.use_plugins == True:
+            if self.check_done:
+                # self.logger.info(f"worker Response: {full_response}")
+                if not full_response.strip().endswith('[done]'):
+                    raise Exception(f"Response is not ended with [done]: {full_response}")
+                else:
+                    full_response = full_response.strip().rstrip('[done]')
             full_response = full_response.replace("<tool_code>", "").replace("</tool_code>", "")
             function_parameter = parse_function_xml(full_response)
             if function_parameter:
@@ -711,7 +719,7 @@ class chatgpt(BaseLLM):
             self.logger.info(f"api_key: {kwargs.get('api_key', self.api_key)}")
 
         # 发送请求并处理响应
-        for i in range(3):
+        for i in range(10):
             if self.print_log:
                 replaced_text = json.loads(re.sub(r';base64,([A-Za-z0-9+/=]+)', ';base64,***', json.dumps(json_post)))
                 replaced_text_str = json.dumps(replaced_text, indent=4, ensure_ascii=False)
@@ -763,6 +771,9 @@ class chatgpt(BaseLLM):
             except httpx.RemoteProtocolError:
                 continue
             except Exception as e:
+                if "Response is not ended with [done]:" in str(e):
+                    self.logger.error(f"Response is not ended with [done]: {e}")
+                    continue
                 self.logger.error(f"发生了未预料的错误：{e}")
                 import traceback
                 self.logger.error(traceback.format_exc())
@@ -770,7 +781,7 @@ class chatgpt(BaseLLM):
                     e = "您输入了无效的API URL，请使用正确的URL并使用`/start`命令重新设置API URL。具体错误如下：\n\n" + str(e)
                     raise Exception(f"{e}")
                 # 最后一次重试失败，向上抛出异常
-                if i == 2:
+                if i == 11:
                     raise Exception(f"{e}")
 
     def ask_stream(
