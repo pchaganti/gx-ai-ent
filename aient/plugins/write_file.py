@@ -87,4 +87,4 @@ if __name__ == "__main__":
     with open("test.txt", "r", encoding="utf-8") as file:
         content = file.read()
     print(write_to_file("test.txt", content))
-    # python -m beswarm.aient.src.aient.plugins.write_file
+    # python -m beswarm.aient.aient.plugins.write_file

@@ -1050,4 +1050,4 @@ if __name__ == "__main__":
     # print(parse_function_xml(test_xml))
     print(remove_xml_tags_and_content(test_xml))
 
-# 运行本文件：python -m beswarm.aient.src.aient.utils.scripts
+# 运行本文件：python -m beswarm.aient.aient.utils.scripts

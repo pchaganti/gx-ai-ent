@@ -181,7 +181,7 @@ Examples:
         return f"<tool_error>读取文件时发生错误: {e}</tool_error>"
 
 if __name__ == "__main__":
-    # python -m beswarm.aient.src.aient.plugins.read_file
+    # python -m beswarm.aient.aient.plugins.read_file
     result = read_file("./work/cax/Lenia Notebook.ipynb")
     print(result)
     print(len(result))
