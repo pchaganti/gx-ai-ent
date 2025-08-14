@@ -868,7 +868,7 @@ class chatgpt(BaseLLM):
             convo_id=convo_id,
             pass_history=pass_history,
             model=model or self.engine,
-            stream=False,
+            stream=True,
             **kwargs,
         )
         full_response: str = "".join([r async for r in response])
@@ -892,7 +892,7 @@ class chatgpt(BaseLLM):
             convo_id=convo_id,
             pass_history=pass_history,
             model=model or self.engine,
-            stream=False,
+            stream=True,
             **kwargs,
         )
         full_response: str = "".join([r for r in response])
