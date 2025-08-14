@@ -637,6 +637,9 @@ class chatgpt(BaseLLM):
                 else:
                     all_responses.append(f"[{tool_name}({tool_args}) Result]:\n\n{tool_response}")
 
+                if self.check_done:
+                    all_responses.append("Your message **must** end with [done] to signify the end of your output.")
+
             # 合并所有工具响应
             function_response = "\n\n".join(all_responses).strip()
             if missing_required_params:
