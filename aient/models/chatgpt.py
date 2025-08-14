@@ -6,9 +6,8 @@ import httpx
 import asyncio
 import logging
 import inspect
-import requests
 from typing import Set
-from typing import Union, Optional, Callable, List, Dict, Any
+from typing import Union, Optional, Callable
 from pathlib import Path
 
 
@@ -360,6 +359,7 @@ class chatgpt(BaseLLM):
         system_prompt=None,
         pass_history=9999,
         is_async=False,
+        stream: bool = True,
         **kwargs
     ):
         """
@@ -388,6 +388,7 @@ class chatgpt(BaseLLM):
             elif isinstance(line, (dict, list)):
                 if isinstance(line, dict) and safe_get(line, "choices", 0, "message", "content"):
                     full_response = line["choices"][0]["message"]["content"]
+                    total_tokens = safe_get(line, "usage", "total_tokens", default=0)
                     return full_response
                 else:
                     return str(line)
@@ -660,7 +661,7 @@ class chatgpt(BaseLLM):
                     model=model or self.engine, function_arguments=function_full_response,
                     function_call_id=function_call_id, api_key=kwargs.get('api_key', self.api_key),
                     api_url=kwargs.get('api_url', self.api_url.chat_url),
-                    plugins=kwargs.get("plugins", self.plugins), system_prompt=system_prompt
+                    plugins=kwargs.get("plugins", self.plugins), system_prompt=system_prompt, stream=stream
                 ):
                     yield chunk
             else:
@@ -670,7 +671,7 @@ class chatgpt(BaseLLM):
                     model=model or self.engine, function_arguments=function_full_response,
                     function_call_id=function_call_id, api_key=kwargs.get('api_key', self.api_key),
                     api_url=kwargs.get('api_url', self.api_url.chat_url),
-                    plugins=kwargs.get("plugins", self.plugins), system_prompt=system_prompt
+                    plugins=kwargs.get("plugins", self.plugins), system_prompt=system_prompt, stream=stream
                 ):
                     yield chunk
         else:
@@ -764,7 +765,7 @@ class chatgpt(BaseLLM):
                     generator, convo_id=convo_id, function_name=function_name,
                     total_tokens=total_tokens, function_arguments=function_arguments,
                     function_call_id=function_call_id, model=model, language=language,
-                    system_prompt=system_prompt, pass_history=pass_history, is_async=True, **kwargs
+                    system_prompt=system_prompt, pass_history=pass_history, is_async=True, stream=stream, **kwargs
                 ):
                     yield processed_chunk
 
