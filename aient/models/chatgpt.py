@@ -471,6 +471,8 @@ class chatgpt(BaseLLM):
                 # self.logger.info(f"worker Response: {full_response}")
                 if not full_response.strip().endswith('[done]'):
                     raise Exception(f"Response is not ended with [done]: {full_response}")
+                elif not full_response.strip():
+                    raise Exception(f"Response is empty")
                 else:
                     full_response = full_response.strip().rstrip('[done]')
             full_response = full_response.replace("<tool_code>", "").replace("</tool_code>", "")
@@ -719,7 +721,7 @@ class chatgpt(BaseLLM):
             self.logger.info(f"api_key: {kwargs.get('api_key', self.api_key)}")
 
         # 发送请求并处理响应
-        for i in range(10):
+        for i in range(30):
             if self.print_log:
                 replaced_text = json.loads(re.sub(r';base64,([A-Za-z0-9+/=]+)', ';base64,***', json.dumps(json_post)))
                 replaced_text_str = json.dumps(replaced_text, indent=4, ensure_ascii=False)
@@ -771,8 +773,8 @@ class chatgpt(BaseLLM):
             except httpx.RemoteProtocolError:
                 continue
             except Exception as e:
-                if "Response is not ended with [done]:" in str(e):
-                    self.logger.error(f"Response is not ended with [done]: {e}")
+                if "Response is" in str(e):
+                    self.logger.error(f"{e}")
                     continue
                 self.logger.error(f"发生了未预料的错误：{e}")
                 import traceback
