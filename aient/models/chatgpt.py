@@ -435,6 +435,9 @@ class chatgpt(BaseLLM):
             for chunk in process_sync():
                 yield chunk
 
+        if not full_response.strip():
+            raise Exception(json.dumps({"type": "response_empty_error", "message": "Response is empty"}, ensure_ascii=False))
+
         if self.print_log:
             self.logger.info(f"total_tokens: {total_tokens}")
 
@@ -448,8 +451,6 @@ class chatgpt(BaseLLM):
                 # self.logger.info(f"worker Response: {full_response}")
                 if not full_response.strip().endswith('[done]'):
                     raise Exception(json.dumps({"type": "validation_error", "message": "Response is not ended with [done]", "response": full_response}, ensure_ascii=False))
-                elif not full_response.strip():
-                    raise Exception(json.dumps({"type": "response_empty_error", "message": "Response is empty"}, ensure_ascii=False))
                 else:
                     full_response = full_response.strip().rstrip('[done]')
             full_response = full_response.replace("<tool_code>", "").replace("</tool_code>", "")
