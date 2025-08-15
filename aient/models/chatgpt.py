@@ -6,10 +6,7 @@ import httpx
 import asyncio
 import logging
 import inspect
-from typing import Set
 from typing import Union, Optional, Callable
-from pathlib import Path
-
 
 from .base import BaseLLM
 from ..plugins.registry import registry
@@ -17,27 +14,6 @@ from ..plugins import PLUGINS, get_tools_result_async, function_call_list, updat
 from ..utils.scripts import safe_get, async_generator_to_sync, parse_function_xml, parse_continuous_json, convert_functions_to_xml, remove_xml_tags_and_content
 from ..core.request import prepare_request_payload
 from ..core.response import fetch_response_stream, fetch_response
-
-def get_filtered_keys_from_object(obj: object, *keys: str) -> Set[str]:
-    """
-    Get filtered list of object variable names.
-    :param keys: List of keys to include. If the first key is "not", the remaining keys will be removed from the class keys.
-    :return: List of class keys.
-    """
-    class_keys = obj.__dict__.keys()
-    if not keys:
-        return set(class_keys)
-
-    # Remove the passed keys from the class keys.
-    if keys[0] == "not":
-        return {key for key in class_keys if key not in keys[1:]}
-    # Check if all passed keys are valid
-    if invalid_keys := set(keys) - class_keys:
-        raise ValueError(
-            f"Invalid keys: {invalid_keys}",
-        )
-    # Only return specified keys that are in class_keys
-    return {key for key in keys if key in class_keys}
 
 class chatgpt(BaseLLM):
     """
@@ -407,7 +383,7 @@ class chatgpt(BaseLLM):
 
             resp = json.loads(line) if isinstance(line, str) else line
             if "error" in resp:
-                raise Exception(f"{resp}")
+                raise Exception(json.dumps({"type": "api_error", "details": resp}, ensure_ascii=False))
 
             total_tokens = total_tokens or safe_get(resp, "usage", "total_tokens", default=0)
             delta = safe_get(resp, "choices", 0, "delta")
@@ -471,9 +447,9 @@ class chatgpt(BaseLLM):
             if self.check_done:
                 # self.logger.info(f"worker Response: {full_response}")
                 if not full_response.strip().endswith('[done]'):
-                    raise Exception(f"Response is not ended with [done]: {full_response}")
+                    raise Exception(json.dumps({"type": "validation_error", "message": "Response is not ended with [done]", "response": full_response}, ensure_ascii=False))
                 elif not full_response.strip():
-                    raise Exception(f"Response is empty")
+                    raise Exception(json.dumps({"type": "response_empty_error", "message": "Response is empty"}, ensure_ascii=False))
                 else:
                     full_response = full_response.strip().rstrip('[done]')
             full_response = full_response.replace("<tool_code>", "").replace("</tool_code>", "")
@@ -537,8 +513,10 @@ class chatgpt(BaseLLM):
         # 处理函数调用
         if need_function_call and self.use_plugins == True:
             if self.print_log:
-                self.logger.info(f"function_parameter: {function_parameter}")
-                self.logger.info(f"function_full_response: {function_full_response}")
+                if function_parameter:
+                    self.logger.info(f"function_parameter: {function_parameter}")
+                else:
+                    self.logger.info(f"function_full_response: {function_full_response}")
 
             function_response = ""
             # 定义处理单个工具调用的辅助函数
@@ -553,17 +531,13 @@ class chatgpt(BaseLLM):
                 tool_response = ""
                 has_args = safe_get(self.function_call_list, tool_name, "parameters", "required", default=False)
                 if self.function_calls_counter[tool_name] <= self.function_call_max_loop and (tool_args != "{}" or not has_args):
-                    function_call_max_tokens = self.truncate_limit - 1000
-                    if function_call_max_tokens <= 0:
-                        function_call_max_tokens = int(self.truncate_limit / 2)
                     if self.print_log:
-                        self.logger.info(f"function_call {tool_name}, max token: {function_call_max_tokens}")
+                        self.logger.info(f"Tool use, calling: {tool_name}")
 
                     # 处理函数调用结果
                     if is_async:
                         async for chunk in get_tools_result_async(
-                            tool_name, tool_args, function_call_max_tokens,
-                            model or self.engine, chatgpt, kwargs.get('api_key', self.api_key),
+                            tool_name, tool_args, model or self.engine, chatgpt, kwargs.get('api_key', self.api_key),
                             kwargs.get('api_url', self.api_url.chat_url), use_plugins=False, model=model or self.engine,
                             add_message=self.add_to_conversation, convo_id=convo_id, language=language
                         ):
@@ -571,8 +545,7 @@ class chatgpt(BaseLLM):
                     else:
                         async def run_async():
                             async for chunk in get_tools_result_async(
-                                tool_name, tool_args, function_call_max_tokens,
-                                model or self.engine, chatgpt, kwargs.get('api_key', self.api_key),
+                                tool_name, tool_args, model or self.engine, chatgpt, kwargs.get('api_key', self.api_key),
                                 kwargs.get('api_url', self.api_url.chat_url), use_plugins=False, model=model or self.engine,
                                 add_message=self.add_to_conversation, convo_id=convo_id, language=language
                             ):
@@ -638,8 +611,8 @@ class chatgpt(BaseLLM):
                 else:
                     all_responses.append(f"[{tool_name}({tool_args}) Result]:\n\n{tool_response}")
 
-                if self.check_done:
-                    all_responses.append("Your message **must** end with [done] to signify the end of your output.")
+            if self.check_done:
+                all_responses.append("Your message **must** end with [done] to signify the end of your output.")
 
             # 合并所有工具响应
             function_response = "\n\n".join(all_responses).strip()
@@ -721,13 +694,17 @@ class chatgpt(BaseLLM):
 
         # 打印日志
         if self.print_log:
-            self.logger.info(f"api_url: {kwargs.get('api_url', self.api_url.chat_url)}, {url}")
-            self.logger.info(f"api_key: {kwargs.get('api_key', self.api_key)}")
+            self.logger.debug(f"api_url: {kwargs.get('api_url', self.api_url.chat_url)}")
+            self.logger.debug(f"api_key: {kwargs.get('api_key', self.api_key)}")
+        need_done_prompt = False
 
         # 发送请求并处理响应
         for i in range(30):
+            tmp_post_json = copy.deepcopy(json_post)
+            if need_done_prompt:
+                tmp_post_json["messages"].extend(need_done_prompt)
             if self.print_log:
-                replaced_text = json.loads(re.sub(r';base64,([A-Za-z0-9+/=]+)', ';base64,***', json.dumps(json_post)))
+                replaced_text = json.loads(re.sub(r';base64,([A-Za-z0-9+/=]+)', ';base64,***', json.dumps(tmp_post_json)))
                 replaced_text_str = json.dumps(replaced_text, indent=4, ensure_ascii=False)
                 self.logger.info(f"Request Body:\n{replaced_text_str}")
 
@@ -753,11 +730,11 @@ class chatgpt(BaseLLM):
                 else:
                     if stream:
                         generator = fetch_response_stream(
-                            self.aclient, url, headers, json_post, engine_type, model or self.engine,
+                            self.aclient, url, headers, tmp_post_json, engine_type, model or self.engine,
                         )
                     else:
                         generator = fetch_response(
-                            self.aclient, url, headers, json_post, engine_type, model or self.engine,
+                            self.aclient, url, headers, tmp_post_json, engine_type, model or self.engine,
                         )
 
                 # 处理正常响应
@@ -777,18 +754,24 @@ class chatgpt(BaseLLM):
             except httpx.RemoteProtocolError:
                 continue
             except Exception as e:
-                if "Response is" in str(e):
-                    self.logger.error(f"{e}")
+                self.logger.error(f"{e}")
+                if "validation_error" in str(e):
+                    bad_assistant_message = json.loads(str(e))["response"]
+                    need_done_prompt = [
+                        {"role": "assistant", "content": bad_assistant_message},
+                        {"role": "user", "content": "你的消息没有以[done]结尾，请重新输出"}
+                    ]
                     continue
-                self.logger.error(f"发生了未预料的错误：{e}")
+                if "response_empty_error" in str(e):
+                    continue
                 import traceback
                 self.logger.error(traceback.format_exc())
                 if "Invalid URL" in str(e):
-                    e = "您输入了无效的API URL，请使用正确的URL并使用`/start`命令重新设置API URL。具体错误如下：\n\n" + str(e)
-                    raise Exception(f"{e}")
+                    error_message = "您输入了无效的API URL，请使用正确的URL并使用`/start`命令重新设置API URL。具体错误如下：\n\n" + str(e)
+                    raise Exception(json.dumps({"type": "configuration_error", "message": error_message}, ensure_ascii=False))
                 # 最后一次重试失败，向上抛出异常
                 if i == 11:
-                    raise Exception(f"{e}")
+                    raise Exception(json.dumps({"type": "retry_failed", "message": str(e)}, ensure_ascii=False))
 
     def ask_stream(
         self,
@@ -916,156 +899,3 @@ class chatgpt(BaseLLM):
         ]
         self.tokens_usage[convo_id] = 0
         self.current_tokens[convo_id] = 0
-
-    def save(self, file: str, *keys: str) -> None:
-        """
-        Save the Chatbot configuration to a JSON file
-        """
-        with open(file, "w", encoding="utf-8") as f:
-            data = {
-                key: self.__dict__[key]
-                for key in get_filtered_keys_from_object(self, *keys)
-            }
-            # saves session.proxies dict as session
-            # leave this here for compatibility
-            data["session"] = data["proxy"]
-            del data["aclient"]
-            json.dump(
-                data,
-                f,
-                indent=2,
-            )
-
-    def load(self, file: Path, *keys_: str) -> None:
-        """
-        Load the Chatbot configuration from a JSON file
-        """
-        with open(file, encoding="utf-8") as f:
-            # load json, if session is in keys, load proxies
-            loaded_config = json.load(f)
-            keys = get_filtered_keys_from_object(self, *keys_)
-
-            if (
-                "session" in keys
-                and loaded_config["session"]
-                or "proxy" in keys
-                and loaded_config["proxy"]
-            ):
-                self.proxy = loaded_config.get("session", loaded_config["proxy"])
-                self.session = httpx.Client(
-                    follow_redirects=True,
-                    proxies=self.proxy,
-                    timeout=self.timeout,
-                    cookies=self.session.cookies,
-                    headers=self.session.headers,
-                )
-                self.aclient = httpx.AsyncClient(
-                    follow_redirects=True,
-                    proxies=self.proxy,
-                    timeout=self.timeout,
-                    cookies=self.session.cookies,
-                    headers=self.session.headers,
-                )
-            if "session" in keys:
-                keys.remove("session")
-            if "aclient" in keys:
-                keys.remove("aclient")
-            self.__dict__.update({key: loaded_config[key] for key in keys})
-
-    def _handle_response_error_common(self, response_text, json_post):
-        """通用的响应错误处理逻辑，适用于同步和异步场景"""
-        try:
-            # 检查内容审核失败
-            if "Content did not pass the moral check" in response_text:
-                return json_post, False, f"内容未通过道德检查：{response_text[:400]}"
-
-            # 处理函数调用相关错误
-            if "function calling" in response_text:
-                if "tools" in json_post:
-                    del json_post["tools"]
-                if "tool_choice" in json_post:
-                    del json_post["tool_choice"]
-                return json_post, True, None
-
-            # 处理请求格式错误
-            elif "invalid_request_error" in response_text:
-                for index, mess in enumerate(json_post["messages"]):
-                    if type(mess["content"]) == list and "text" in mess["content"][0]:
-                        json_post["messages"][index] = {
-                            "role": mess["role"],
-                            "content": mess["content"][0]["text"]
-                        }
-                return json_post, True, None
-
-            # 处理角色不允许错误
-            elif "'function' is not an allowed role" in response_text:
-                if json_post["messages"][-1]["role"] == "tool":
-                    mess = json_post["messages"][-1]
-                    json_post["messages"][-1] = {
-                        "role": "assistant",
-                        "name": mess["name"],
-                        "content": mess["content"]
-                    }
-                return json_post, True, None
-
-            # 处理服务器繁忙错误
-            elif "Sorry, server is busy" in response_text:
-                for index, mess in enumerate(json_post["messages"]):
-                    if type(mess["content"]) == list and "text" in mess["content"][0]:
-                        json_post["messages"][index] = {
-                            "role": mess["role"],
-                            "content": mess["content"][0]["text"]
-                        }
-                return json_post, True, None
-
-            # 处理token超限错误
-            elif "is not possible because the prompts occupy" in response_text:
-                max_tokens = re.findall(r"only\s(\d+)\stokens", response_text)
-                if max_tokens:
-                    json_post["max_tokens"] = int(max_tokens[0])
-                    return json_post, True, None
-
-            # 默认移除工具相关设置
-            else:
-                if "tools" in json_post:
-                    del json_post["tools"]
-                if "tool_choice" in json_post:
-                    del json_post["tool_choice"]
-                return json_post, True, None
-
-        except Exception as e:
-            self.logger.error(f"处理响应错误时出现异常: {e}")
-            return json_post, False, str(e)
-
-    def _handle_response_error_sync(self, response, json_post):
-        """处理API响应错误并相应地修改请求体（同步版本）"""
-        response_text = response.text
-
-        # 处理空响应
-        if response.status_code == 200 and response_text == "":
-            for index, mess in enumerate(json_post["messages"]):
-                if type(mess["content"]) == list and "text" in mess["content"][0]:
-                    json_post["messages"][index] = {
-                        "role": mess["role"],
-                        "content": mess["content"][0]["text"]
-                    }
-            return json_post, True
-
-        json_post, should_retry, error_msg = self._handle_response_error_common(response_text, json_post)
-
-        if error_msg:
-            raise Exception(f"{response.status_code} {response.reason} {error_msg}")
-
-        return json_post, should_retry
-
-    async def _handle_response_error(self, response, json_post):
-        """处理API响应错误并相应地修改请求体（异步版本）"""
-        await response.aread()
-        response_text = response.text
-
-        json_post, should_retry, error_msg = self._handle_response_error_common(response_text, json_post)
-
-        if error_msg:
-            raise Exception(f"{response.status_code} {response.reason_phrase} {error_msg}")
-
-        return json_post, should_retry

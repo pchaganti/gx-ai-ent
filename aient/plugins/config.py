@@ -5,7 +5,7 @@ import inspect
 from .registry import registry
 from ..utils.prompt import search_key_word_prompt
 
-async def get_tools_result_async(function_call_name, function_full_response, function_call_max_tokens, engine, robot, api_key, api_url, use_plugins, model, add_message, convo_id, language):
+async def get_tools_result_async(function_call_name, function_full_response, engine, robot, api_key, api_url, use_plugins, model, add_message, convo_id, language):
     function_response = ""
     function_to_call = None
     call_args = json.loads(function_full_response)
