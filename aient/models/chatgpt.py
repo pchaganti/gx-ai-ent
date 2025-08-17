@@ -15,6 +15,31 @@ from ..utils.scripts import safe_get, async_generator_to_sync, parse_function_xm
 from ..core.request import prepare_request_payload
 from ..core.response import fetch_response_stream, fetch_response
 
+class APITimeoutError(Exception):
+    """Custom exception for API timeout errors."""
+    pass
+
+class ValidationError(Exception):
+    """Custom exception for response validation errors."""
+    def __init__(self, message, response_text):
+        super().__init__(message)
+        self.response_text = response_text
+
+class EmptyResponseError(Exception):
+    """Custom exception for empty API responses."""
+    pass
+
+class ModelNotFoundError(Exception):
+    """Custom exception for model not found (404) errors."""
+    pass
+
+class TaskComplete(Exception):
+    """Exception-like signal to indicate the task is complete."""
+    def __init__(self, message):
+        self.completion_message = message
+        super().__init__(f"Task completed with message: {message}")
+
+
 class chatgpt(BaseLLM):
     """
     Official ChatGPT API
@@ -436,7 +461,7 @@ class chatgpt(BaseLLM):
                 yield chunk
 
         if not full_response.strip():
-            raise Exception(json.dumps({"type": "response_empty_error", "message": "Response is empty"}, ensure_ascii=False))
+            raise EmptyResponseError("Response is empty")
 
         if self.print_log:
             self.logger.info(f"total_tokens: {total_tokens}")
@@ -450,7 +475,7 @@ class chatgpt(BaseLLM):
             if self.check_done:
                 # self.logger.info(f"worker Response: {full_response}")
                 if not full_response.strip().endswith('[done]'):
-                    raise Exception(json.dumps({"type": "validation_error", "message": "Response is not ended with [done]", "response": full_response}, ensure_ascii=False))
+                    raise ValidationError("Response is not ended with [done]", response_text=full_response)
                 else:
                     full_response = full_response.strip().rstrip('[done]')
             full_response = full_response.replace("<tool_code>", "").replace("</tool_code>", "")
@@ -494,6 +519,8 @@ class chatgpt(BaseLLM):
                 # 删除 task_complete 跟其他工具一起调用的情况，因为 task_complete 必须单独调用
                 if len(function_parameter) > 1:
                     function_parameter = [tool_dict for tool_dict in function_parameter if tool_dict.get("function_name", "") != "task_complete"]
+                if len(function_parameter) == 1 and function_parameter[0].get("function_name", "") == "task_complete":
+                    raise TaskComplete(safe_get(function_parameter, 0, "parameter", "message", default="The task has been completed."))
 
                 if self.print_log and invalid_tools:
                     self.logger.error(f"invalid_tools: {invalid_tools}")
@@ -739,13 +766,20 @@ class chatgpt(BaseLLM):
                         )
 
                 # 处理正常响应
+                index = 0
                 async for processed_chunk in self._process_stream_response(
                     generator, convo_id=convo_id, function_name=function_name,
                     total_tokens=total_tokens, function_arguments=function_arguments,
                     function_call_id=function_call_id, model=model, language=language,
                     system_prompt=system_prompt, pass_history=pass_history, is_async=True, stream=stream, **kwargs
                 ):
+                    if index == 0:
+                        if "HTTP Error', 'status_code': 524" in processed_chunk:
+                            raise APITimeoutError("Response timeout")
+                        if "HTTP Error', 'status_code': 404" in processed_chunk:
+                            raise ModelNotFoundError(f"Model: {model or self.engine} not found!")
                     yield processed_chunk
+                    index += 1
 
                 # 成功处理，跳出重试循环
                 break
@@ -754,17 +788,25 @@ class chatgpt(BaseLLM):
                 return # Stop iteration
             except httpx.RemoteProtocolError:
                 continue
+            except APITimeoutError:
+                self.logger.warning("API response timeout (524), retrying...")
+                continue
+            except ValidationError as e:
+                self.logger.warning(f"Validation failed: {e}. Retrying with corrective prompt.")
+                need_done_prompt = [
+                    {"role": "assistant", "content": e.response_text},
+                    {"role": "user", "content": "你的消息没有以[done]结尾，请重新输出"}
+                ]
+                continue
+            except EmptyResponseError as e:
+                self.logger.warning(f"{e}, retrying...")
+                continue
+            except TaskComplete as e:
+                raise
+            except ModelNotFoundError as e:
+                raise
             except Exception as e:
                 self.logger.error(f"{e}")
-                if "validation_error" in str(e):
-                    bad_assistant_message = json.loads(str(e))["response"]
-                    need_done_prompt = [
-                        {"role": "assistant", "content": bad_assistant_message},
-                        {"role": "user", "content": "你的消息没有以[done]结尾，请重新输出"}
-                    ]
-                    continue
-                if "response_empty_error" in str(e):
-                    continue
                 import traceback
                 self.logger.error(traceback.format_exc())
                 if "Invalid URL" in str(e):
