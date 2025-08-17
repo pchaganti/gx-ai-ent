@@ -33,6 +33,10 @@ class ModelNotFoundError(Exception):
     """Custom exception for model not found (404) errors."""
     pass
 
+class RateLimitError(Exception):
+    """Custom exception for rate limit (429) errors."""
+    pass
+
 class TaskComplete(Exception):
     """Exception-like signal to indicate the task is complete."""
     def __init__(self, message):
@@ -778,6 +782,8 @@ class chatgpt(BaseLLM):
                             raise APITimeoutError("Response timeout")
                         if "HTTP Error', 'status_code': 404" in processed_chunk:
                             raise ModelNotFoundError(f"Model: {model or self.engine} not found!")
+                        if "HTTP Error', 'status_code': 429" in processed_chunk:
+                            raise RateLimitError(f"Rate limit exceeded for model: {model or self.engine}")
                     yield processed_chunk
                     index += 1
 
@@ -790,6 +796,9 @@ class chatgpt(BaseLLM):
                 continue
             except APITimeoutError:
                 self.logger.warning("API response timeout (524), retrying...")
+                continue
+            except RateLimitError as e:
+                self.logger.warning(f"{e}, retrying...")
                 continue
             except ValidationError as e:
                 self.logger.warning(f"Validation failed: {e}. Retrying with corrective prompt.")
