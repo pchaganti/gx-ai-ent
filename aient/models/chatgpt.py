@@ -37,6 +37,14 @@ class RateLimitError(Exception):
     """Custom exception for rate limit (429) errors."""
     pass
 
+class ConfigurationError(Exception):
+    """Custom exception for configuration errors."""
+    pass
+
+class RetryFailedError(Exception):
+    """Custom exception for retry failures."""
+    pass
+
 class TaskComplete(Exception):
     """Exception-like signal to indicate the task is complete."""
     def __init__(self, message):
@@ -731,7 +739,7 @@ class chatgpt(BaseLLM):
         need_done_prompt = False
 
         # 发送请求并处理响应
-        for i in range(30):
+        for i in range(10):
             tmp_post_json = copy.deepcopy(json_post)
             if need_done_prompt:
                 tmp_post_json["messages"].extend(need_done_prompt)
@@ -789,8 +797,8 @@ class chatgpt(BaseLLM):
 
                 # 成功处理，跳出重试循环
                 break
-            except (httpx.ConnectError, httpx.ReadTimeout):
-                self.logger.error("连接或读取超时错误，请检查服务器状态或网络连接。")
+            except (httpx.ConnectError, httpx.ReadTimeout, httpx.PoolTimeout):
+                self.logger.error("Connection or read timeout.")
                 return # Stop iteration
             except httpx.RemoteProtocolError:
                 continue
@@ -820,10 +828,10 @@ class chatgpt(BaseLLM):
                 self.logger.error(traceback.format_exc())
                 if "Invalid URL" in str(e):
                     error_message = "您输入了无效的API URL，请使用正确的URL并使用`/start`命令重新设置API URL。具体错误如下：\n\n" + str(e)
-                    raise Exception(json.dumps({"type": "configuration_error", "message": error_message}, ensure_ascii=False))
+                    raise ConfigurationError(error_message)
                 # 最后一次重试失败，向上抛出异常
-                if i == 11:
-                    raise Exception(json.dumps({"type": "retry_failed", "message": str(e)}, ensure_ascii=False))
+                if i == 10:
+                    raise RetryFailedError(str(e))
 
     def ask_stream(
         self,
