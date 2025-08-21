@@ -37,6 +37,10 @@ class RateLimitError(Exception):
     """Custom exception for rate limit (429) errors."""
     pass
 
+class HTTPError(Exception):
+    """Custom exception for HTTP 500 errors."""
+    pass
+
 class ConfigurationError(Exception):
     """Custom exception for configuration errors."""
     pass
@@ -793,6 +797,8 @@ class chatgpt(BaseLLM):
                             raise ModelNotFoundError(f"Model: {model or self.engine} not found!")
                         if "HTTP Error', 'status_code': 429" in processed_chunk:
                             raise RateLimitError(f"Rate limit exceeded for model: {model or self.engine}")
+                        if "HTTP Error', 'status_code': " in processed_chunk:
+                            raise HTTPError(f"HTTP Error: {processed_chunk}")
                     yield processed_chunk
                     index += 1
 
@@ -805,6 +811,9 @@ class chatgpt(BaseLLM):
                 continue
             except APITimeoutError:
                 self.logger.warning("API response timeout (524), retrying...")
+                continue
+            except HTTPError as e:
+                self.logger.warning(f"{e}, retrying...")
                 continue
             except RateLimitError as e:
                 self.logger.warning(f"{e}, retrying...")
