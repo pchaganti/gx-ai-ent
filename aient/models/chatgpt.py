@@ -809,6 +809,9 @@ class chatgpt(BaseLLM):
                 return # Stop iteration
             except httpx.RemoteProtocolError:
                 continue
+            except httpx.ReadError:
+                self.logger.warning(f"{e}, retrying...")
+                continue
             except APITimeoutError:
                 self.logger.warning("API response timeout (524), retrying...")
                 continue
