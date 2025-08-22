@@ -37,8 +37,16 @@ class RateLimitError(Exception):
     """Custom exception for rate limit (429) errors."""
     pass
 
+class BadRequestError(Exception):
+    """Custom exception for bad request (400) errors."""
+    pass
+
 class HTTPError(Exception):
     """Custom exception for HTTP 500 errors."""
+    pass
+
+class InputTokenCountExceededError(Exception):
+    """Custom exception for input token count exceeding the maximum."""
     pass
 
 class ConfigurationError(Exception):
@@ -802,6 +810,10 @@ class chatgpt(BaseLLM):
                             raise ModelNotFoundError(f"Model: {model or self.engine} not found!")
                         if "HTTP Error', 'status_code': 429" in processed_chunk:
                             raise RateLimitError(f"Rate limit exceeded for model: {model or self.engine}")
+                        if "HTTP Error', 'status_code': 413" in processed_chunk:
+                            raise InputTokenCountExceededError(processed_chunk)
+                        if "HTTP Error', 'status_code': 400" in processed_chunk:
+                            raise BadRequestError(f"Bad Request: {processed_chunk}")
                         if "HTTP Error', 'status_code': " in processed_chunk:
                             raise HTTPError(f"HTTP Error: {processed_chunk}")
                     yield processed_chunk
@@ -826,6 +838,12 @@ class chatgpt(BaseLLM):
             except RateLimitError as e:
                 self.logger.warning(f"{e}, retrying...")
                 continue
+            except InputTokenCountExceededError as e:
+                self.logger.error(f"The request body is too long: {e}")
+                raise
+            except BadRequestError as e:
+                self.logger.error(f"Bad request error: {e}")
+                raise
             except ValidationError as e:
                 self.logger.warning(f"Validation failed: {e}. Retrying with corrective prompt.")
                 need_done_prompt = [
