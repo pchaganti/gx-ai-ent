@@ -236,6 +236,10 @@ class chatgpt(BaseLLM):
                     if type(self.conversation[convo_id][message_index]["content"]) == list \
                     and type(self.conversation[convo_id][message_index + 1]["content"]) == dict:
                         self.conversation[convo_id][message_index + 1]["content"] = [self.conversation[convo_id][message_index + 1]["content"]]
+                    if type(self.conversation[convo_id][message_index]["content"]) == str \
+                    and type(self.conversation[convo_id][message_index + 1]["content"]) == str \
+                    and self.conversation[convo_id][message_index].get("content").endswith(self.conversation[convo_id][message_index + 1].get("content")):
+                        self.conversation[convo_id][message_index + 1]["content"] = ""
                     self.conversation[convo_id][message_index]["content"] += self.conversation[convo_id][message_index + 1]["content"]
                 self.conversation[convo_id].pop(message_index + 1)
                 conversation_len = conversation_len - 1
@@ -744,7 +748,8 @@ class chatgpt(BaseLLM):
         need_done_prompt = False
 
         # 发送请求并处理响应
-        for i in range(10):
+        retry_times = 0
+        while True:
             tmp_post_json = copy.deepcopy(json_post)
             if need_done_prompt:
                 tmp_post_json["messages"].extend(need_done_prompt)
@@ -843,7 +848,8 @@ class chatgpt(BaseLLM):
                     error_message = "您输入了无效的API URL，请使用正确的URL并使用`/start`命令重新设置API URL。具体错误如下：\n\n" + str(e)
                     raise ConfigurationError(error_message)
                 # 最后一次重试失败，向上抛出异常
-                if i == 10:
+                retry_times += 1
+                if retry_times == 9:
                     raise RetryFailedError(str(e))
 
     def ask_stream(
