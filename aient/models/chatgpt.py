@@ -844,6 +844,9 @@ class chatgpt(BaseLLM):
             except BadRequestError as e:
                 self.logger.error(f"Bad request error: {e}")
                 raise
+            except GeneratorExit:
+                self.logger.warning("GeneratorExit caught, closing stream.")
+                break
             except ValidationError as e:
                 self.logger.warning(f"Validation failed: {e}. Retrying with corrective prompt.")
                 need_done_prompt = [
