@@ -757,6 +757,7 @@ class chatgpt(BaseLLM):
 
         # 发送请求并处理响应
         retry_times = 0
+        error_to_raise = None
         while True:
             tmp_post_json = copy.deepcopy(json_post)
             if need_done_prompt:
@@ -840,7 +841,8 @@ class chatgpt(BaseLLM):
                 continue
             except InputTokenCountExceededError as e:
                 self.logger.error(f"The request body is too long: {e}")
-                raise
+                error_to_raise = e
+                break
             except BadRequestError as e:
                 self.logger.error(f"Bad request error: {e}")
                 raise
@@ -872,6 +874,9 @@ class chatgpt(BaseLLM):
                 retry_times += 1
                 if retry_times == 9:
                     raise RetryFailedError(str(e))
+
+        if error_to_raise:
+            raise error_to_raise
 
     def ask_stream(
         self,
