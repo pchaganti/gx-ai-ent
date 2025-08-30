@@ -260,7 +260,7 @@ class chatgpt(BaseLLM):
         if self.check_done and done_message:
             done_message.visible = False
             if self.conversation[convo_id][-1][-1].name == "done":
-                done_message[-1].visible = True
+                self.conversation[convo_id][-1][-1].visible = True
 
         # 构造请求数据
         request_data = {
