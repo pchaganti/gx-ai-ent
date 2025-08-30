@@ -97,13 +97,8 @@ class chatgpt(BaseLLM):
         Initialize Chatbot with API key (from https://platform.openai.com/account/api-keys)
         """
         super().__init__(api_key, engine, api_url, system_prompt, proxy, timeout, max_tokens, temperature, top_p, presence_penalty, frequency_penalty, reply_count, truncate_limit, use_plugins=use_plugins, print_log=print_log)
-        self.conversation: dict[str, list[dict]] = {
-            "default": [
-                {
-                    "role": "system",
-                    "content": self.system_prompt,
-                },
-            ],
+        self.conversation: dict[str, Messages] = {
+            "default": Messages(SystemMessage(self.system_prompt)),
         }
         if cache_messages:
             self.conversation["default"] = cache_messages
