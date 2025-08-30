@@ -265,7 +265,7 @@ class chatgpt(BaseLLM):
         # 构造请求数据
         request_data = {
             "model": model or self.engine,
-            "messages": self.conversation[convo_id].render_latest() if pass_history else Messages(
+            "messages": await self.conversation[convo_id].render_latest() if pass_history else Messages(
                 SystemMessage(self.system_prompt, self.conversation[convo_id].provider("files")),
                 UserMessage(prompt)
             ),
