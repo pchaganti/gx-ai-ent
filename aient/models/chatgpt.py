@@ -14,6 +14,7 @@ from ..plugins import PLUGINS, get_tools_result_async, function_call_list, updat
 from ..utils.scripts import safe_get, async_generator_to_sync, parse_function_xml, parse_continuous_json, convert_functions_to_xml, remove_xml_tags_and_content
 from ..core.request import prepare_request_payload
 from ..core.response import fetch_response_stream, fetch_response
+from ..architext.architext import Messages, SystemMessage, UserMessage, AssistantMessage, ToolCalls, ToolResults, Texts, RoleMessage, Images, Files
 
 class APITimeoutError(Exception):
     """Custom exception for API timeout errors."""
@@ -88,7 +89,6 @@ class chatgpt(BaseLLM):
         print_log: bool = False,
         tools: Optional[Union[list, str, Callable]] = [],
         function_call_max_loop: int = 3,
-        cut_history_by_function_name: str = "",
         cache_messages: list = None,
         logger: logging.Logger = None,
         check_done: bool = False,
@@ -109,8 +109,6 @@ class chatgpt(BaseLLM):
             self.conversation["default"] = cache_messages
         self.function_calls_counter = {}
         self.function_call_max_loop = function_call_max_loop
-        self.cut_history_by_function_name = cut_history_by_function_name
-        self.latest_file_content = {}
         self.check_done = check_done
 
         if logger:
@@ -164,95 +162,48 @@ class chatgpt(BaseLLM):
         if convo_id not in self.conversation:
             self.reset(convo_id=convo_id)
         if function_name == "" and message:
-            self.conversation[convo_id].append({"role": role, "content": message})
+            self.conversation[convo_id].append(RoleMessage(role, message))
         elif function_name != "" and message:
-            # 删除从 cut_history_by_function_name 以后的所有历史记录
-            if function_name == self.cut_history_by_function_name:
-                matching_message = next(filter(lambda x: safe_get(x, "tool_calls", 0, "function", "name", default="") == 'get_next_pdf', self.conversation[convo_id]), None)
-                if matching_message is not None:
-                    self.conversation[convo_id] = self.conversation[convo_id][:self.conversation[convo_id].index(matching_message)]
-
             if not (all(value == False for value in self.plugins.values()) or self.use_plugins == False):
-                self.conversation[convo_id].append({
-                    "role": "assistant",
-                    "tool_calls": [
-                        {
-                            "id": function_call_id,
-                            "type": "function",
-                            "function": {
-                                "name": function_name,
-                                "arguments": function_arguments,
-                            },
-                        }
-                    ],
-                    })
-                self.conversation[convo_id].append({"role": role, "tool_call_id": function_call_id, "content": message})
+                tool_calls = [
+                    {
+                        "id": function_call_id,
+                        "type": "function",
+                        "function": {
+                            "name": function_name,
+                            "arguments": function_arguments,
+                        },
+                    }
+                ]
+                self.conversation[convo_id].append(ToolCalls(tool_calls))
+                self.conversation[convo_id].append(ToolResults(tool_call_id=function_call_id, content=message))
             else:
                 last_user_message = self.conversation[convo_id][-1]["content"]
                 if last_user_message != message:
-                    image_message_list = []
+                    image_message_list = UserMessage()
                     if isinstance(function_arguments, str):
                         functions_list = json.loads(function_arguments)
                     else:
                         functions_list = function_arguments
                     for tool_info in functions_list:
                         if tool_info.get("base64_image"):
-                            image_message_list.append({"type": "text", "text": safe_get(tool_info, "parameter", "image_path", default="") + " image:"})
-                            image_message_list.append({
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": tool_info["base64_image"],
-                                }
-                            })
-                    self.conversation[convo_id].append({"role": "assistant", "content": convert_functions_to_xml(function_arguments)})
+                            image_message_list.extend([
+                                safe_get(tool_info, "parameter", "image_path", default="") + " image:",
+                                Images(tool_info["base64_image"]),
+                            ])
+                    self.conversation[convo_id].append(AssistantMessage(convert_functions_to_xml(function_arguments)))
                     if image_message_list:
-                        self.conversation[convo_id].append({"role": "user", "content": [{"type": "text", "text": message}] + image_message_list})
+                        self.conversation[convo_id].append(UserMessage(message + image_message_list))
                     else:
-                        self.conversation[convo_id].append({"role": "user", "content": message})
+                        self.conversation[convo_id].append(UserMessage(message))
                 else:
-                    self.conversation[convo_id].append({"role": "assistant", "content": "我已经执行过这个工具了，接下来我需要做什么？"})
-
+                    self.conversation[convo_id].append(AssistantMessage("我已经执行过这个工具了，接下来我需要做什么？"))
         else:
             self.logger.error(f"error: add_to_conversation message is None or empty, role: {role}, function_name: {function_name}, message: {message}")
 
-        conversation_len = len(self.conversation[convo_id]) - 1
-        message_index = 0
         # if self.print_log:
         #     replaced_text = json.loads(re.sub(r';base64,([A-Za-z0-9+/=]+)', ';base64,***', json.dumps(self.conversation[convo_id])))
         #     self.logger.info(json.dumps(replaced_text, indent=4, ensure_ascii=False))
-        while message_index < conversation_len:
-            if self.conversation[convo_id][message_index]["role"] == self.conversation[convo_id][message_index + 1]["role"]:
-                if self.conversation[convo_id][message_index].get("content") and self.conversation[convo_id][message_index + 1].get("content") \
-                and self.conversation[convo_id][message_index].get("content") != self.conversation[convo_id][message_index + 1].get("content"):
-                    if type(self.conversation[convo_id][message_index + 1]["content"]) == str \
-                    and type(self.conversation[convo_id][message_index]["content"]) == list:
-                        self.conversation[convo_id][message_index + 1]["content"] = [{"type": "text", "text": self.conversation[convo_id][message_index + 1]["content"]}]
-                    if type(self.conversation[convo_id][message_index]["content"]) == str \
-                    and type(self.conversation[convo_id][message_index + 1]["content"]) == list:
-                        self.conversation[convo_id][message_index]["content"] = [{"type": "text", "text": self.conversation[convo_id][message_index]["content"]}]
-                    if type(self.conversation[convo_id][message_index]["content"]) == dict \
-                    and type(self.conversation[convo_id][message_index + 1]["content"]) == str:
-                        self.conversation[convo_id][message_index]["content"] = [self.conversation[convo_id][message_index]["content"]]
-                        self.conversation[convo_id][message_index + 1]["content"] = [{"type": "text", "text": self.conversation[convo_id][message_index + 1]["content"]}]
-                    if type(self.conversation[convo_id][message_index]["content"]) == dict \
-                    and type(self.conversation[convo_id][message_index + 1]["content"]) == list:
-                        self.conversation[convo_id][message_index]["content"] = [self.conversation[convo_id][message_index]["content"]]
-                    if type(self.conversation[convo_id][message_index]["content"]) == dict \
-                    and type(self.conversation[convo_id][message_index + 1]["content"]) == dict:
-                        self.conversation[convo_id][message_index]["content"] = [self.conversation[convo_id][message_index]["content"]]
-                        self.conversation[convo_id][message_index + 1]["content"] = [self.conversation[convo_id][message_index + 1]["content"]]
-                    if type(self.conversation[convo_id][message_index]["content"]) == list \
-                    and type(self.conversation[convo_id][message_index + 1]["content"]) == dict:
-                        self.conversation[convo_id][message_index + 1]["content"] = [self.conversation[convo_id][message_index + 1]["content"]]
-                    if type(self.conversation[convo_id][message_index]["content"]) == str \
-                    and type(self.conversation[convo_id][message_index + 1]["content"]) == str \
-                    and self.conversation[convo_id][message_index].get("content").endswith(self.conversation[convo_id][message_index + 1].get("content")):
-                        self.conversation[convo_id][message_index + 1]["content"] = ""
-                    self.conversation[convo_id][message_index]["content"] += self.conversation[convo_id][message_index + 1]["content"]
-                self.conversation[convo_id].pop(message_index + 1)
-                conversation_len = conversation_len - 1
-            else:
-                message_index = message_index + 1
 
         history_len = len(self.conversation[convo_id])
 
@@ -290,27 +241,6 @@ class chatgpt(BaseLLM):
             else:
                 break
 
-    def get_latest_file_content(self) -> str:
-        """
-        获取最新文件内容
-        """
-        result = ""
-        if self.latest_file_content:
-            for file_path, content in self.latest_file_content.items():
-                result += (
-                    "<file>"
-                    f"<file_path>{file_path}</file_path>"
-                    f"<file_content>{content}</file_content>"
-                    "</file>\n\n"
-                )
-            if result:
-                result = (
-                    "<latest_file_content>"
-                    f"{result}"
-                    "</latest_file_content>"
-                )
-        return result
-
     async def get_post_body(
         self,
         prompt: str,
@@ -321,8 +251,6 @@ class chatgpt(BaseLLM):
         stream: bool = True,
         **kwargs,
     ):
-        self.conversation[convo_id][0] = {"role": "system","content": self.system_prompt + "\n\n" + self.get_latest_file_content()}
-
         # 构造 provider 信息
         provider = {
             "provider": "openai",
@@ -336,10 +264,10 @@ class chatgpt(BaseLLM):
         # 构造请求数据
         request_data = {
             "model": model or self.engine,
-            "messages": copy.deepcopy(self.conversation[convo_id]) if pass_history else [
-                {"role": "system","content": self.system_prompt + "\n\n" + self.get_latest_file_content()},
-                {"role": role, "content": prompt}
-            ],
+            "messages": self.conversation[convo_id].render_latest() if pass_history else Messages(
+                SystemMessage(self.system_prompt, self.conversation[convo_id].provider("files")),
+                UserMessage(prompt)
+            ),
             "stream": stream,
             "temperature": kwargs.get("temperature", self.temperature)
         }
@@ -655,7 +583,7 @@ class chatgpt(BaseLLM):
                         else:
                             yield chunk
                 if tool_name == "read_file" and "<tool_error>" not in tool_response:
-                    self.latest_file_content[tool_info['parameter']["file_path"]] = tool_response
+                    self.conversation[convo_id].provider("files").update(tool_info['parameter']["file_path"], tool_response)
                     all_responses.append(f"[{tool_name}({tool_args}) Result]:\n\nRead file successfully! The file content has been updated in the tag <latest_file_content>.")
                 elif tool_name == "write_to_file" and "<tool_error>" not in tool_response:
                     all_responses.append(f"[{tool_name} Result]:\n\n{tool_response}")
@@ -998,9 +926,8 @@ class chatgpt(BaseLLM):
         Reset the conversation
         """
         self.system_prompt = system_prompt or self.system_prompt
-        self.latest_file_content = {}
-        self.conversation[convo_id] = [
-            {"role": "system", "content": self.system_prompt},
-        ]
+        self.conversation[convo_id] = Messages(
+            SystemMessage(Texts("system_prompt", self.system_prompt), self.conversation[convo_id].provider("files")),
+        )
         self.tokens_usage[convo_id] = 0
         self.current_tokens[convo_id] = 0
