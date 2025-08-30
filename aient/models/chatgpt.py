@@ -256,6 +256,12 @@ class chatgpt(BaseLLM):
             "image": True
         }
 
+        done_message = self.conversation[convo_id].provider("done")
+        if self.check_done and done_message:
+            done_message.visible = False
+            if self.conversation[convo_id][-1][-1].name == "done":
+                done_message[-1].visible = True
+
         # 构造请求数据
         request_data = {
             "model": model or self.engine,
