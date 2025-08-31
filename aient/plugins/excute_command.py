@@ -75,6 +75,7 @@ def excute_command(command):
   - **正确示例**: `git clone https://github.com/user/repo_name.git repo_name`
   - **错误用法**: `git clone https://github.com/user/repo_name.git .`
 - **禁止**: 禁止用于查看pdf，禁止使用 `pdftotext` 命令。
+- **检查子任务状态**: 禁止使用 `ls`, `cat` 等文件系统命令轮询检查子任务的完成状态或其输出。请改用 `get_task_result`, `get_all_tasks_status` 等工具来获取子任务的状态和结果。
 
 参数:
     command: 要执行的命令，例如克隆仓库、安装依赖、运行代码等。
