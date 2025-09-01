@@ -188,9 +188,9 @@ class chatgpt(BaseLLM):
                             ])
                     self.conversation[convo_id].append(AssistantMessage(convert_functions_to_xml(function_arguments)))
                     if image_message_list:
-                        self.conversation[convo_id].append(UserMessage(message + image_message_list))
+                        self.conversation[convo_id].append(UserMessage(message + image_message_list, Texts("\n\nYour message **must** end with [done] to signify the end of your output.", name="done", visible=self.check_done)))
                     else:
-                        self.conversation[convo_id].append(UserMessage(message))
+                        self.conversation[convo_id].append(UserMessage(message, Texts("\n\nYour message **must** end with [done] to signify the end of your output.", name="done", visible=self.check_done)))
                 else:
                     self.conversation[convo_id].append(AssistantMessage("我已经执行过这个工具了，接下来我需要做什么？"))
         else:
@@ -599,9 +599,6 @@ class chatgpt(BaseLLM):
                     all_responses.append(f"[{tool_name}({tool_args}) Result]:\n\nRead image successfully!")
                 else:
                     all_responses.append(f"[{tool_name}({tool_args}) Result]:\n\n{tool_response}")
-
-            if self.check_done:
-                all_responses.append("Your message **must** end with [done] to signify the end of your output.")
 
             # 合并所有工具响应
             function_response = "\n\n".join(all_responses).strip()
