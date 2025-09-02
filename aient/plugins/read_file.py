@@ -7,7 +7,7 @@ from .registry import register_tool
 
 # 读取文件内容
 @register_tool()
-def read_file(file_path):
+def read_file(file_path, head: int = None):
     """
 Description: Request to read the contents of a file at the specified path. Use this when you need to examine the contents of an existing file you do not know the contents of, for example to analyze code, review text files, or extract information from configuration files. Automatically extracts raw text from PDF and DOCX files. May not be suitable for other types of binary files, as it returns the raw content as a string.
 
@@ -16,6 +16,7 @@ Description: Request to read the contents of a file at the specified path. Use t
 
 参数:
     file_path: 要读取的文件路径，(required) The path of the file to read (relative to the current working directory)
+    head: (可选) 读取文件的前N行，默认为None，读取整个文件
 
 返回:
     文件内容的字符串
@@ -161,13 +162,23 @@ Examples:
                 # 捕获在此块中可能发生的其他错误，例如未被早期检查捕获的文件读取问题
                 return f"<tool_error>处理通用文件 '{file_path}' 时发生错误: {e}</tool_error>"
 
-        if file_path.lower().endswith('.csv'):
-            lines = text_content.splitlines(True)
-            if len(lines) > 500:
-                top_lines = lines[:250]
-                bottom_lines = lines[-250:]
-                omitted_count = len(lines) - 500
-                text_content = "".join(top_lines) + f"\n... (中间省略了 {omitted_count} 行) ...\n" + "".join(bottom_lines)
+        if head is not None:
+            try:
+                num_lines = int(head)
+                if num_lines > 0:
+                    lines = text_content.splitlines(True)
+                    return "".join(lines[:num_lines])
+            except (ValueError, TypeError):
+                # Invalid head value, ignore and proceed with normal logic.
+                pass
+
+        # if file_path.lower().endswith('.csv'):
+        #     lines = text_content.splitlines(True)
+        #     if len(lines) > 500:
+        #         top_lines = lines[:250]
+        #         bottom_lines = lines[-250:]
+        #         omitted_count = len(lines) - 500
+        #         text_content = "".join(top_lines) + f"\n... (中间省略了 {omitted_count} 行) ...\n" + "".join(bottom_lines)
 
         # 返回文件内容
         return text_content
@@ -182,6 +193,6 @@ Examples:
 
 if __name__ == "__main__":
     # python -m beswarm.aient.aient.plugins.read_file
-    result = read_file("./work/cax/Lenia Notebook.ipynb")
+    result = read_file("./work/cax/Lenia Notebook.ipynb", head=10)
     print(result)
     print(len(result))
