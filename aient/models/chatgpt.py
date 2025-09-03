@@ -476,7 +476,9 @@ class chatgpt(BaseLLM):
                 # 删除 task_complete 跟其他工具一起调用的情况，因为 task_complete 必须单独调用
                 if len(function_parameter) > 1:
                     function_parameter = [tool_dict for tool_dict in function_parameter if tool_dict.get("function_name", "") != "task_complete"]
-                    function_parameter = [tool_dict for tool_dict in function_parameter if tool_dict.get("function_name", "") != "get_task_result"]
+                    # 仅当存在其他工具时，才删除 get_task_result
+                    if any(tool.get("function_name") != "get_task_result" for tool in function_parameter):
+                        function_parameter = [tool_dict for tool_dict in function_parameter if tool_dict.get("function_name", "") != "get_task_result"]
                 if len(function_parameter) == 1 and function_parameter[0].get("function_name", "") == "task_complete":
                     raise TaskComplete(safe_get(function_parameter, 0, "parameter", "message", default="The task has been completed."))
 
