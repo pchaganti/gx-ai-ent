@@ -17,6 +17,21 @@ from ..core.request import prepare_request_payload
 from ..core.response import fetch_response_stream, fetch_response
 from ..architext.architext import Messages, SystemMessage, UserMessage, AssistantMessage, ToolCalls, ToolResults, Texts, RoleMessage, Images, Files
 
+class ToolResult(Texts):
+    def __init__(self, tool_name: str, tool_args: str, tool_response: str, name: Optional[str] = None, visible: bool = True, newline: bool = True):
+        super().__init__(text=tool_response, name=name or f"tool_result_{tool_name}", visible=visible, newline=newline)
+        self.tool_name = tool_name
+        self.tool_args = tool_args
+
+    async def render(self) -> Optional[str]:
+        tool_response = await super().render()
+        if tool_response is None:
+            tool_response = ""
+        if self.tool_args:
+            return f"[{self.tool_name}({self.tool_args}) Result]:\n\n{tool_response}"
+        else:
+            return f"[{self.tool_name} Result]:\n\n{tool_response}"
+
 class APITimeoutError(Exception):
     """Custom exception for API timeout errors."""
     pass
@@ -172,8 +187,8 @@ class chatgpt(BaseLLM):
                 self.conversation[convo_id].append(ToolCalls(tool_calls))
                 self.conversation[convo_id].append(ToolResults(tool_call_id=function_call_id, content=message))
             else:
-                last_user_message = self.conversation[convo_id][-1]["content"]
-                if last_user_message != message:
+                last_user_message = self.conversation[convo_id][-1]
+                if last_user_message != UserMessage(message):
                     image_message_list = UserMessage()
                     if isinstance(function_arguments, str):
                         functions_list = json.loads(function_arguments)
@@ -564,7 +579,7 @@ class chatgpt(BaseLLM):
                 tool_calls = function_parameter
 
             # 处理所有工具调用
-            all_responses = []
+            all_responses = UserMessage()
 
             for tool_info in tool_calls:
                 tool_name = tool_info['function_name']
@@ -584,27 +599,28 @@ class chatgpt(BaseLLM):
                             tool_response = chunk.replace("function_response:", "")
                         else:
                             yield chunk
-                if tool_name == "read_file" and "<tool_error>" not in tool_response:
-                    self.conversation[convo_id].provider("files").update(tool_info['parameter']["file_path"], tool_response)
-                    all_responses.append(f"[{tool_name}({tool_args}) Result]:\n\nRead file successfully! The file content has been updated in the tag <latest_file_content>.")
-                elif tool_name == "get_knowledge_graph_tree" and "<tool_error>" not in tool_response:
-                    self.conversation[convo_id].provider("knowledge_graph").visible = True
-                    all_responses.append(f"[{tool_name}({tool_args}) Result]:\n\nGet knowledge graph tree successfully! The knowledge graph tree has been updated in the tag <knowledge_graph_tree>.")
-                elif tool_name == "write_to_file" and "<tool_error>" not in tool_response:
-                    all_responses.append(f"[{tool_name} Result]:\n\n{tool_response}")
-                elif tool_name == "read_image" and "<tool_error>" not in tool_response:
-                    tool_info["base64_image"] = tool_response
-                    all_responses.append(f"[{tool_name}({tool_args}) Result]:\n\nRead image successfully!")
-                elif tool_response.startswith("data:image/") and ";base64," in tool_response and "<tool_error>" not in tool_response:
-                    tool_info["base64_image"] = tool_response
-                    all_responses.append(f"[{tool_name}({tool_args}) Result]:\n\nRead image successfully!")
-                else:
-                    all_responses.append(f"[{tool_name}({tool_args}) Result]:\n\n{tool_response}")
+                final_tool_response = tool_response
+                if "<tool_error>" not in tool_response:
+                    if tool_name == "read_file":
+                        self.conversation[convo_id].provider("files").update(tool_info['parameter']["file_path"], tool_response)
+                        final_tool_response = "Read file successfully! The file content has been updated in the tag <latest_file_content>."
+                    elif tool_name == "get_knowledge_graph_tree":
+                        self.conversation[convo_id].provider("knowledge_graph").visible = True
+                        final_tool_response = "Get knowledge graph tree successfully! The knowledge graph tree has been updated in the tag <knowledge_graph_tree>."
+                    elif tool_name == "write_to_file":
+                        tool_args = None
+                    elif tool_name == "read_image":
+                        tool_info["base64_image"] = tool_response
+                        final_tool_response = "Read image successfully!"
+                    elif tool_response.startswith("data:image/") and ";base64," in tool_response:
+                        tool_info["base64_image"] = tool_response
+                        final_tool_response = "Read image successfully!"
+                all_responses.append(ToolResult(tool_name, tool_args, final_tool_response))
 
             # 合并所有工具响应
-            function_response = "\n\n".join(all_responses).strip()
+            function_response = all_responses
             if missing_required_params:
-                function_response += "\n\n" + "\n\n".join(missing_required_params)
+                function_response.append(Texts("\n\n".join(missing_required_params)))
 
             # 使用第一个工具的名称和参数作为历史记录
             function_call_name = tool_calls[0]['function_name']
