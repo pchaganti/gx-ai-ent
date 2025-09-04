@@ -688,7 +688,7 @@ class chatgpt(BaseLLM):
         # 准备会话
         self.system_prompt = system_prompt or self.system_prompt
         if convo_id not in self.conversation or pass_history <= 2:
-            self.reset(convo_id=convo_id, system_prompt=system_prompt)
+            self.reset(convo_id=convo_id, system_prompt=self.system_prompt)
         self.add_to_conversation(prompt, role, convo_id=convo_id, function_name=function_name, total_tokens=total_tokens, function_arguments=function_arguments, pass_history=pass_history, function_call_id=function_call_id)
 
         # 获取请求体
@@ -945,7 +945,7 @@ class chatgpt(BaseLLM):
         """
         self.system_prompt = system_prompt or self.system_prompt
         self.conversation[convo_id] = Messages(
-            SystemMessage(Texts("system_prompt", self.system_prompt), self.conversation[convo_id].provider("files")),
+            SystemMessage(self.system_prompt, self.conversation[convo_id].provider("files")),
         )
         self.tokens_usage[convo_id] = 0
         self.current_tokens[convo_id] = 0
