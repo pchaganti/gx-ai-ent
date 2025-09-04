@@ -90,10 +90,6 @@ chatgpt_system_prompt = (
     "You are ChatGPT, a large language model trained by OpenAI. Use simple characters to represent mathematical symbols. Do not use LaTeX commands. Respond conversationally"
 )
 
-claude_system_prompt = (
-    "You are Claude, a large language model trained by Anthropic. Use simple characters to represent mathematical symbols. Do not use LaTeX commands. Respond conversationally in {}."
-)
-
 search_system_prompt = (
     "You are ChatGPT, a large language model trained by OpenAI. Respond conversationally in {}."
     "You can break down the task into multiple steps and search the web to answer my questions one by one."

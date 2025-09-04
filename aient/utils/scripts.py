@@ -134,14 +134,6 @@ def is_surrounded_by_chinese(text, index):
 def replace_char(string, index, new_char):
     return string[:index] + new_char + string[index+1:]
 
-def claude_replace(text):
-    Punctuation_mapping = {",": "，", ":": "：", "!": "！", "?": "？", ";": "；"}
-    key_list = list(Punctuation_mapping.keys())
-    for i in range(len(text)):
-        if is_surrounded_by_chinese(text, i) and (text[i] in key_list):
-            text = replace_char(text, i, Punctuation_mapping[text[i]])
-    return text
-
 def safe_get(data, *keys, default=None):
     for key in keys:
         try:

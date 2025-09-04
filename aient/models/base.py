@@ -11,8 +11,8 @@ class BaseLLM:
     def __init__(
         self,
         api_key: str = None,
-        engine: str = os.environ.get("GPT_ENGINE") or "gpt-3.5-turbo",
-        api_url: str = (os.environ.get("API_URL", None) or "https://api.openai.com/v1/chat/completions"),
+        engine: str = os.environ.get("MODEL") or "gpt-3.5-turbo",
+        api_url: str = (os.environ.get("BASE_URL", None) or "https://api.openai.com/v1/chat/completions"),
         system_prompt: str = prompt.chatgpt_system_prompt,
         proxy: str = None,
         timeout: float = 600,

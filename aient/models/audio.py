@@ -4,13 +4,13 @@ import json
 from .base import BaseLLM
 
 API = os.environ.get('API', None)
-API_URL = os.environ.get('API_URL', None)
+BASE_URL = os.environ.get('BASE_URL', None)
 
 class whisper(BaseLLM):
     def __init__(
         self,
         api_key: str,
-        api_url: str = (os.environ.get("API_URL") or "https://api.openai.com/v1/audio/transcriptions"),
+        api_url: str = (os.environ.get("BASE_URL") or "https://api.openai.com/v1/audio/transcriptions"),
         timeout: float = 20,
     ):
         super().__init__(api_key, api_url=api_url, timeout=timeout)

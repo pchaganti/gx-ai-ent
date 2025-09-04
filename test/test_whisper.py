@@ -10,5 +10,5 @@ files = {
     'model': (None, 'whisper-1')
 }
 
-response = requests.post(os.environ.get('API_URL', None), headers=headers, files=files)
+response = requests.post(os.environ.get('BASE_URL', None), headers=headers, files=files)
 print(response.text)
