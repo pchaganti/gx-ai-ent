@@ -286,7 +286,7 @@ class chatgpt(BaseLLM):
             "messages": await self.conversation[convo_id].render_latest() if pass_history else Messages(
                 SystemMessage(self.system_prompt, self.conversation[convo_id].provider("files")),
                 UserMessage(prompt)
-            ),
+            ).render(),
             "stream": stream,
             "temperature": kwargs.get("temperature", self.temperature)
         }
