@@ -435,7 +435,7 @@ class chatgpt(BaseLLM):
             for chunk in process_sync():
                 yield chunk
 
-        if not full_response.strip():
+        if not full_response.strip() and not need_function_call:
             raise EmptyResponseError("Response is empty")
 
         if self.print_log:
