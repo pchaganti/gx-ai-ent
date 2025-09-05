@@ -125,8 +125,12 @@ class chatgpt(BaseLLM):
         else:
             # 如果没有提供 logger，创建一个默认的，它只会打印到控制台
             self.logger = logging.getLogger("chatgpt_default")
+            self.logger.propagate = False
             if not self.logger.handlers: # 防止重复添加 handler
-                self.logger.addHandler(logging.StreamHandler())
+                handler = logging.StreamHandler()
+                formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+                handler.setFormatter(formatter)
+                self.logger.addHandler(handler)
                 self.logger.setLevel(logging.INFO if print_log else logging.WARNING)
 
         # 注册和处理传入的工具
