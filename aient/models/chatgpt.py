@@ -108,6 +108,7 @@ class chatgpt(BaseLLM):
         cache_messages: list = None,
         logger: logging.Logger = None,
         check_done: bool = False,
+        retry_count: int = 999999,
     ) -> None:
         """
         Initialize Chatbot with API key (from https://platform.openai.com/account/api-keys)
@@ -119,7 +120,7 @@ class chatgpt(BaseLLM):
         self.function_calls_counter = {}
         self.function_call_max_loop = function_call_max_loop
         self.check_done = check_done
-
+        self.retry_count = retry_count
         if logger:
             self.logger = logger
         else:
@@ -708,7 +709,8 @@ class chatgpt(BaseLLM):
         # 发送请求并处理响应
         retry_times = 0
         error_to_raise = None
-        while True:
+        while retry_times < self.retry_count:
+            retry_times += 1
             tmp_post_json = copy.deepcopy(json_post)
             if need_done_prompt:
                 tmp_post_json["messages"].extend(need_done_prompt)
@@ -821,8 +823,7 @@ class chatgpt(BaseLLM):
                     error_message = "您输入了无效的API URL，请使用正确的URL并使用`/start`命令重新设置API URL。具体错误如下：\n\n" + str(e)
                     raise ConfigurationError(error_message)
                 # 最后一次重试失败，向上抛出异常
-                retry_times += 1
-                if retry_times == 9:
+                if retry_times == self.retry_count:
                     raise RetryFailedError(str(e))
 
         if error_to_raise:
