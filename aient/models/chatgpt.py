@@ -12,7 +12,7 @@ from typing import Union, Optional, Callable
 from .base import BaseLLM
 from ..plugins.registry import registry
 from ..plugins import PLUGINS, get_tools_result_async, function_call_list, update_tools_config
-from ..utils.scripts import safe_get, async_generator_to_sync, parse_function_xml, parse_continuous_json, convert_functions_to_xml, remove_xml_tags_and_content
+from ..utils.scripts import safe_get, async_generator_to_sync, parse_function_xml, parse_continuous_json, convert_functions_to_xml, remove_xml_tags_and_content, find_most_frequent_phrase
 from ..core.request import prepare_request_payload
 from ..core.response import fetch_response_stream, fetch_response
 from ..architext.architext import Messages, SystemMessage, UserMessage, AssistantMessage, ToolCalls, ToolResults, Texts, RoleMessage, Images, Files
@@ -79,6 +79,14 @@ class TaskComplete(Exception):
     def __init__(self, message):
         self.completion_message = message
         super().__init__(f"Task completed with message: {message}")
+
+
+class RepetitiveResponseError(Exception):
+    """Custom exception for detecting repetitive and meaningless generated strings."""
+    def __init__(self, message, phrase, count):
+        super().__init__(message)
+        self.phrase = phrase
+        self.count = count
 
 
 class chatgpt(BaseLLM):
@@ -438,6 +446,13 @@ class chatgpt(BaseLLM):
 
         if not full_response.strip() and not need_function_call:
             raise EmptyResponseError("Response is empty")
+        most_frequent_phrase, most_frequent_phrase_count = find_most_frequent_phrase(full_response)
+        if most_frequent_phrase_count > 100:
+            raise RepetitiveResponseError(
+                f"Detected repetitive and meaningless content. The phrase '{most_frequent_phrase}' appeared {most_frequent_phrase_count} times.",
+                most_frequent_phrase,
+                most_frequent_phrase_count
+            )
 
         if self.print_log:
             self.logger.info(f"total_tokens: {total_tokens}")
@@ -798,6 +813,9 @@ class chatgpt(BaseLLM):
                 ]
                 continue
             except EmptyResponseError as e:
+                self.logger.warning(f"{e}, retrying...")
+                continue
+            except RepetitiveResponseError as e:
                 self.logger.warning(f"{e}, retrying...")
                 continue
             except TaskComplete as e:

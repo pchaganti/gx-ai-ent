@@ -3,9 +3,64 @@ import re
 import json
 import fnmatch
 import requests
+import collections
 import urllib.parse
 
 from ..core.utils import get_image_message
+
+def find_most_frequent_phrase(s, min_len=4, max_phrase_len=20):
+    """
+    查找字符串中出现次数最多的短语（单词序列）。
+    此版本经过性能优化，并增加了最大短语长度限制。
+
+    Args:
+        s: 输入字符串。
+        min_len: 短语的最小字符长度。
+        max_phrase_len: 要搜索的最大短语长度（以单词为单位）。
+
+    Returns:
+        一个元组 (most_frequent_phrase, count)，其中
+        most_frequent_phrase 是出现次数最多的短语，
+        count 是它的出现次数。
+        如果没有找到符合条件的重复短语，则返回 ("", 0)。
+    """
+    # start_time = time.time()
+    if not s or len(s) < min_len:
+        return "", 0
+
+    words = [word for word in re.split(r'[\s\n]+', s) if word]
+    if not words:
+        return "", 0
+    n = len(words)
+
+    phrase_counts = collections.defaultdict(int)
+
+    # 确定要检查的实际最大长度
+    effective_max_len = min(n // 2, max_phrase_len)
+
+    # 优化的核心：直接在单词列表上生成并统计所有可能的短语（n-grams）
+    for length in range(1, effective_max_len + 1):
+        for i in range(n - length + 1):
+            phrase_tuple = tuple(words[i:i + length])
+            phrase_counts[phrase_tuple] += 1
+    # 筛选出重复次数大于1且满足最小长度要求的短语
+    best_phrase = ""
+    max_count = 0
+
+    for phrase_tuple, count in phrase_counts.items():
+        if count > 1:
+            phrase = " ".join(phrase_tuple)
+            if len(phrase) >= min_len:
+                if count > max_count:
+                    max_count = count
+                    best_phrase = phrase
+                elif count == max_count and len(phrase) > len(best_phrase):
+                    best_phrase = phrase
+
+    if max_count > 0:
+        return best_phrase, max_count
+    else:
+        return "", 0
 
 def get_doc_from_url(url):
     filename = urllib.parse.unquote(url.split("/")[-1])
