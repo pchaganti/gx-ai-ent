@@ -180,7 +180,7 @@ class chatgpt(BaseLLM):
         """
         Add a message to the conversation
         """
-        # self.logger.info(f"role: {role}, function_name: {function_name}, message: {message}")
+        # self.logger.info(f"role: {role}, function_name: {function_name}, message: {message}, function_arguments: {function_arguments}")
         if convo_id not in self.conversation:
             self.reset(convo_id=convo_id)
         if function_name == "" and message:
@@ -284,9 +284,9 @@ class chatgpt(BaseLLM):
         }
 
         done_message = self.conversation[convo_id].provider("done")
-        if self.check_done and done_message:
+        if done_message:
             done_message.visible = False
-            if self.conversation[convo_id][-1][-1].name == "done":
+            if self.check_done and self.conversation[convo_id][-1][-1].name == "done":
                 self.conversation[convo_id][-1][-1].visible = True
 
         # 构造请求数据
@@ -627,6 +627,11 @@ class chatgpt(BaseLLM):
                     elif tool_name == "get_knowledge_graph_tree":
                         self.conversation[convo_id].provider("knowledge_graph").visible = True
                         final_tool_response = "Get knowledge graph tree successfully! The knowledge graph tree has been updated in the tag <knowledge_graph_tree>."
+                    elif tool_name.endswith("goal"):
+                        goal_provider = self.conversation[convo_id].provider("goal")
+                        if goal_provider:
+                            goal_provider += tool_response
+                        final_tool_response = "Get goal successfully! The goal has been updated in the tag <goal>."
                     elif tool_name == "write_to_file":
                         tool_args = None
                     elif tool_name == "read_image":
