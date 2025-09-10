@@ -630,7 +630,7 @@ class chatgpt(BaseLLM):
                     elif tool_name.endswith("goal"):
                         goal_provider = self.conversation[convo_id].provider("goal")
                         if goal_provider:
-                            goal_provider += tool_response
+                            goal_provider += f"\n\n<{tool_name}>{tool_response}</{tool_name}>"
                         final_tool_response = "Get goal successfully! The goal has been updated in the tag <goal>."
                     elif tool_name == "write_to_file":
                         tool_args = None
