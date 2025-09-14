@@ -615,7 +615,7 @@ class chatgpt(BaseLLM):
                 final_tool_response = tool_response
                 if "<tool_error>" not in tool_response:
                     if tool_name == "read_file":
-                        self.conversation[convo_id].provider("files").update(tool_info['parameter']["file_path"], tool_response)
+                        self.conversation[convo_id].provider("files").update(tool_info['parameter']["file_path"], tool_response, head=safe_get(tool_info, 'parameter', "head", default=None))
                         final_tool_response = "Read file successfully! The file content has been updated in the tag <latest_file_content>."
                     elif tool_name == "get_knowledge_graph_tree":
                         self.conversation[convo_id].provider("knowledge_graph").visible = True
