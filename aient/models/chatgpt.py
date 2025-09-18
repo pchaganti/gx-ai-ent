@@ -89,6 +89,13 @@ class RepetitiveResponseError(Exception):
         self.count = count
 
 
+class AllToolsMissingParametersError(Exception):
+    """Custom exception for when all tools are missing required parameters."""
+    def __init__(self, message, response_text):
+        super().__init__(message)
+        self.response_text = response_text
+
+
 class chatgpt(BaseLLM):
     """
     Official ChatGPT API
@@ -500,6 +507,9 @@ class chatgpt(BaseLLM):
                             missing_required_params.append(f"Error: {tool_name} missing required parameters: {missing_required_params}")
                 function_parameter = valid_function_parameters
 
+                if not function_parameter and missing_required_params:
+                    raise AllToolsMissingParametersError("\n\n".join(missing_required_params), response_text=full_response)
+
                 # 删除 task_complete 跟其他工具一起调用的情况，因为 task_complete 必须单独调用
                 if len(function_parameter) > 1:
                     function_parameter = [tool_dict for tool_dict in function_parameter if tool_dict.get("function_name", "") != "task_complete"]
@@ -808,6 +818,13 @@ class chatgpt(BaseLLM):
                 need_done_prompt = [
                     {"role": "assistant", "content": e.response_text},
                     {"role": "user", "content": "你的消息没有以[done]结尾，请重新输出"}
+                ]
+                continue
+            except AllToolsMissingParametersError as e:
+                self.logger.warning(f"All tools are missing required parameters: {e}. Retrying with corrective prompt.")
+                need_done_prompt = [
+                    {"role": "assistant", "content": e.response_text},
+                    {"role": "user", "content": f"{e.message}，请重新输出"}
                 ]
                 continue
             except EmptyResponseError as e:
