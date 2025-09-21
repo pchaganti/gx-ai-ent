@@ -824,7 +824,7 @@ class chatgpt(BaseLLM):
                 self.logger.warning(f"All tools are missing required parameters: {e}. Retrying with corrective prompt.")
                 need_done_prompt = [
                     {"role": "assistant", "content": e.response_text},
-                    {"role": "user", "content": f"{e.message}，请重新输出"}
+                    {"role": "user", "content": f"{str(e)}，请重新输出"}
                 ]
                 continue
             except EmptyResponseError as e:
