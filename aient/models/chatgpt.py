@@ -703,7 +703,9 @@ class chatgpt(BaseLLM):
         Unified stream handler (async)
         """
         # 准备会话
-        self.system_prompt = system_prompt or self.system_prompt
+        if system_prompt and system_prompt != self.system_prompt:
+            self.system_prompt = system_prompt or self.system_prompt
+            self.conversation[convo_id][0] = SystemMessage(self.system_prompt)
         if convo_id not in self.conversation or pass_history <= 2:
             self.reset(convo_id=convo_id, system_prompt=self.system_prompt)
         self.add_to_conversation(prompt, role, convo_id=convo_id, function_name=function_name, total_tokens=total_tokens, function_arguments=function_arguments, pass_history=pass_history, function_call_id=function_call_id)
